@@ -3,6 +3,8 @@
   "profiles": {
     "TestWorkerService": {
       "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
       "dotnetRunMessages": true,
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"

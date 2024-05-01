@@ -2,18 +2,10 @@
 
 namespace TestWorkerService;
 
-public class SensorDataContext : DbContext
+public class SensorDataContext(DbContextOptions options) : DbContext(options)
 {
-    public SensorDataContext(DbContextOptions options) : base(options)
-    {
-        
-    }
-
     public DbSet<SensorData> SensorData { get; set; }
-
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-       
     }
 }

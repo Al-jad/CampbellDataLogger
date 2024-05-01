@@ -11,4 +11,5 @@ public class Station
 public class AppSettings
 {
     public List<Station> Stations { get; set; }
+    public int Delay { get; set; }
 }

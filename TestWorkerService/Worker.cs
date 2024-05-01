@@ -2,16 +2,11 @@ using Newtonsoft.Json;
 
 namespace TestWorkerService;
 
-public class Worker : BackgroundService
+public class Worker(ILogger<Worker> logger, IServiceProvider serviceProvider) : BackgroundService
 {
-    private readonly ILogger<Worker> _logger;
-    private readonly IServiceProvider _serviceProvider;
-
-    public Worker(ILogger<Worker> logger, IServiceProvider serviceProvider)
-    {
-        _logger = logger;
-        _serviceProvider = serviceProvider;
-    }
+    private readonly AppSettings appSetting = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText("appsettings.json"));
+    private readonly ILogger<Worker> _logger = logger;
+    private readonly IServiceProvider _serviceProvider = serviceProvider;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -46,16 +41,12 @@ public class Worker : BackgroundService
                     File.Move(station.DataFile, station.UploadedDataFile, true);
             }
 
-            await Task.Delay(10000, stoppingToken);
+            await Task.Delay(appSetting.Delay, stoppingToken);
         }
     }
 
     private List<Station> GetAllStations()
     {
-        
-        var jsonText = File.ReadAllText("appsettings.json");
-        
-        var appSettings = JsonConvert.DeserializeObject<AppSettings>(jsonText);
-        return appSettings.Stations;
+        return appSetting.Stations;
     }
 }

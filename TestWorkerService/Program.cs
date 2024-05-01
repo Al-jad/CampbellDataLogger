@@ -1,15 +1,18 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using TestWorkerService;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHostedService<Worker>();
-
+builder.Services.AddControllers();
 builder.Services.AddDbContext<SensorDataContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
+builder.Services.AddSwaggerGen();
+var app = builder.Build();
+app.MapControllers();
 
-
-
-var host = builder.Build();
-host.Run();
+app.UseSwagger();
+app.UseSwaggerUI();
+app.Run();
