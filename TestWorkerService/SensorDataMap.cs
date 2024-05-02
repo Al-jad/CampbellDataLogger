@@ -8,7 +8,8 @@ public class SensorDataMap : ClassMap<SensorData>
 {
     public SensorDataMap()
     {
-        Map(m => m.TimeStamp).Convert(row => DateTime.Parse(row.Row.GetField(0)).ToUniversalTime());        Map(m => m.Record).Name("RECNBR");
+        Map(m => m.TimeStamp).Convert(row => DateTime.Parse(row.Row.GetField(0)).ToUniversalTime());
+        Map(m => m.Record).Name("RECNBR");
         Map(m => m.WL).Name("WL");
         Map(m => m.BatteryVoltage).Name("BattV_Min");
     }
