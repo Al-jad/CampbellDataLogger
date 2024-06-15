@@ -8,11 +8,12 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TestWorkerService\TestWorkerService.csproj" />
+    <ProjectReference Include="..\TestShared\TestShared.csproj" />
   </ItemGroup>
 
 </Project>
