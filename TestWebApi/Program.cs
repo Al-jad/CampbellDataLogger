@@ -12,7 +12,7 @@ builder.Services.AddDbContext<SensorDataContext>(options =>
 builder.Services.AddSwaggerGen();
 var app = builder.Build();
 app.MapControllers();
-
+app.UseCors(opt => opt.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 app.UseSwagger();
 app.UseSwaggerUI();
 app.Run();
