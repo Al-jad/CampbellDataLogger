@@ -22,14 +22,14 @@ public class Worker(ILogger<Worker> logger, IServiceProvider serviceProvider) : 
             using var scope = _serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<SensorDataContext>();
 
-            if (!context.Stations.Any(x => x.SourceAddress.Equals(appSettings.SourceAddress, StringComparison.OrdinalIgnoreCase)))
+            if (!context.Stations.Any(x => x.SourceAddress == appSettings.SourceAddress))
             {
                 await context.Stations.AddRangeAsync(appSettings.Stations, stoppingToken);
                 var station = await context.Stations.FirstAsync(x => x.SourceAddress == appSettings.SourceAddress, stoppingToken);
                 await context.SensorData.Where(x => x.Station == null).ExecuteUpdateAsync(x => x.SetProperty(x => x.StationId, station.Id), stoppingToken);
             }
 
-            var stations = await context.Stations.Where(x => x.SourceAddress.Equals(appSettings.SourceAddress, StringComparison.OrdinalIgnoreCase)).ToListAsync(stoppingToken);
+            var stations = await context.Stations.Where(x => x.SourceAddress == appSettings.SourceAddress).ToListAsync(stoppingToken);
 
             foreach (var station in stations)
             {
