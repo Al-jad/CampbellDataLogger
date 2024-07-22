@@ -28,7 +28,6 @@ public class Worker(ILogger<Worker> logger, IServiceProvider serviceProvider) : 
                 await context.SaveChangesAsync(stoppingToken);
                 var station = await context.Stations.FirstAsync(x => x.SourceAddress == appSettings.SourceAddress, stoppingToken);
                 await context.SensorData.Where(x => x.Station == null).ExecuteUpdateAsync(x => x.SetProperty(x => x.StationId, station.Id), stoppingToken);
-                await context.SaveChangesAsync(stoppingToken);
             }
 
             var stations = await context.Stations.Where(x => x.SourceAddress == appSettings.SourceAddress).ToListAsync(stoppingToken);
