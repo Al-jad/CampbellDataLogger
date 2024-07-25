@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestWebApi", "TestWebApi\Te
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestShared", "TestShared\TestShared.csproj", "{0337446F-7BC0-4385-BC68-83185B5B991D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MNGWorkerService", "MNGWorkerService\MNGWorkerService.csproj", "{A4A5FC89-FC83-4F5D-BF77-25792BB05AD0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MNGWorkerService", "MNGWorkerService\MNGWorkerService.csproj", "{A4A5FC89-FC83-4F5D-BF77-25792BB05AD0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmusatWorkerService", "EmusatWorkerService\EmusatWorkerService.csproj", "{66E5E5EF-D51E-48B3-AFE8-1A5B1D16728F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{A4A5FC89-FC83-4F5D-BF77-25792BB05AD0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4A5FC89-FC83-4F5D-BF77-25792BB05AD0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4A5FC89-FC83-4F5D-BF77-25792BB05AD0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{66E5E5EF-D51E-48B3-AFE8-1A5B1D16728F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{66E5E5EF-D51E-48B3-AFE8-1A5B1D16728F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{66E5E5EF-D51E-48B3-AFE8-1A5B1D16728F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{66E5E5EF-D51E-48B3-AFE8-1A5B1D16728F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

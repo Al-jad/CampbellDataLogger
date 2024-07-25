@@ -26,7 +26,7 @@ namespace MNGWorkerService
             while (!stoppingToken.IsCancellationRequested)
             {
                 if (_logger.IsEnabled(LogLevel.Information)) _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-
+                //find the last page number
                 var t = await httpClient.GetFromJsonAsync<LastPageResponse>("api/stations/maindata", stoppingToken);
                 if (t is not null)
                 {
@@ -36,7 +36,7 @@ namespace MNGWorkerService
 
                     if (currentStations.Count == 0)
                     {
-
+                        //use file to populate the database faster
                         Station[]? jsonStations = JsonSerializer.Deserialize<Station[]>(File.ReadAllText("dbStations.json"));
                         if (jsonStations != null && jsonStations.Length != 0)
                         {
@@ -51,14 +51,11 @@ namespace MNGWorkerService
                         }
                     }
 
-                    //List<Station> currentStations = [];
-
                     DateTime? LastEntryDate = await context.SensorData
                         .Where(x => x.Station != null && x.Station.SourceAddress == appSettings.SourceAddress && x.TimeStamp != null)
                         .OrderByDescending(x => x.TimeStamp)
                         .Select(x => x.TimeStamp)
                         .FirstOrDefaultAsync(cancellationToken: stoppingToken);
-                    //DateTime LastEntryDate = DateTime.UtcNow.AddYears(-10);
 
                     HashSet<MainDataStation> stations = [];
                     List<MainDataSensor> sensorData = [];
@@ -74,12 +71,9 @@ namespace MNGWorkerService
                             }
                             sensorData.AddRange(response.data.Where(x => x.created_at > LastEntryDate));
                             if (response.data.First().created_at < LastEntryDate) break;
-                            //if (sensorData.Count > 30) break;
                         }
-
-                        //await Task.Delay(800, stoppingToken); //toomany request stop
                     }
-                    //Console.WriteLine(JsonSerializer.Serialize(stations.OrderBy(x => x.id), serializerOptions));
+
                     Station[] dbStations = stations.Select(x => new Station
                     {
                         Name = x.Name ?? $"UnNamed Station ID: {x.id}",
@@ -90,9 +84,9 @@ namespace MNGWorkerService
                         SensorData = sensorData.Where(s => s.stations_id == x.id).Select(x => new SensorData
                         {
                             TimeStamp = DateTime.TryParse($"{x.DATE} {x.TIME}", out DateTime parsedDate)
-                                && parsedDate <= x.created_at
-                                ? parsedDate
-                                : x.created_at,
+                                && parsedDate <= x.created_at//to invalidate wrong or null dates
+                                    ? parsedDate
+                                    : x.created_at,
                             Record = (int)x.id,
                             WL = x.LEVEl.ToString(),
                         }).ToList()
@@ -115,12 +109,7 @@ namespace MNGWorkerService
 
                     _logger.LogInformation("Changes Count: {count}", await context.SaveChangesAsync(stoppingToken));
 
-                    _logger.LogInformation("Next run in: {count} minutes", appSettings.Delay/1000/60);
-                    //string dbStationsJson = JsonSerializer.Serialize(dbStations, serializerOptions);
-                    //File.WriteAllText("dbStations.json", dbStationsJson);
-
-                    //Console.WriteLine("JSON files created successfully.");
-                    break;
+                    _logger.LogInformation("Next run in: {count} minutes", appSettings.Delay / 1000 / 60);
                 }
                 else _logger.LogError("Failed to Retrieve Data at: {time}", DateTimeOffset.Now);
 

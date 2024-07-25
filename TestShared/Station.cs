@@ -21,7 +21,12 @@ public class AppSettings
     public required string SourceAddress { get; init; }
     public int Delay { get; set; }
 }
-
+public class EMUAppSettings : AppSettings
+{
+    public required string User { get; init; }
+    public required string Pass { get; init; }
+    public string[] DCPIDs { get; init; } = [];
+}
 public class MSGNAppSettings : AppSettings
 {
     public required string ApiBaseUrl { get; init; }
