@@ -32,7 +32,6 @@ namespace EmusatWorkerService
 
                 foreach (var dcpid in appSettings.DCPIDs)
                 {
-                    if (dcpid == "16AFE17E" || dcpid == "181871EE" || dcpid == "28FA1228" || dcpid == "3668C018") continue;
                     var url = $"https://service.eumetsat.int/dcswebservice/dcpAdmin.do?action=ACTION_DOWNLOAD&id={dcpid}&user={appSettings.User}&pass={appSettings.Pass}";
 
                     var response = await httpClient.GetAsync(url, stoppingToken);
