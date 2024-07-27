@@ -23,8 +23,10 @@ namespace TestWorkerService
     public class SensorDataRequestParameters : RequestParameters
     {
         public long? StationId { get; init; }
-        public DateTime? DateMin { get; init; }
-        public DateTime? DateMax { get; init; }
+        private readonly DateTime? _dateMin;
+        public DateTime? DateMin { get => _dateMin; init => _dateMin = value.HasValue ? value.Value.ToUniversalTime() : null; }
+        private readonly DateTime? _dateMax;
+        public DateTime? DateMax { get => _dateMax; init => _dateMax = value.HasValue ? value.Value.ToUniversalTime() : null; }
     }
 
     public class StationRequestParameters : RequestParameters
