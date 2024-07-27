@@ -69,6 +69,7 @@ namespace EmusatWorkerService
                         }
                         var lastEntryDate = await context.SensorData
                             .OrderByDescending(x => x.TimeStamp)
+                            .Where(x => x.Station != null && x.Station.SourceAddress == appSettings.SourceAddress)
                             .Select(x => x.TimeStamp)
                             .FirstOrDefaultAsync(stoppingToken)
                             ?? DateTime.UtcNow.AddMonths(-2);
