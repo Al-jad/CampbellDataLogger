@@ -1,9 +1,7 @@
-using Microsoft.Extensions.FileSystemGlobbing.Internal;
-using System.Buffers;
+using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
-using System.Xml.Linq;
 using TestWorkerService;
 
 namespace EmusatWorkerService
@@ -34,7 +32,7 @@ namespace EmusatWorkerService
 
                 foreach (var dcpid in appSettings.DCPIDs)
                 {
-                    if (dcpid == "16AFE17E" || dcpid == "181871EE" || dcpid == "28FA1228"|| dcpid == "3668C018") continue;
+                    if (dcpid == "16AFE17E" || dcpid == "181871EE" || dcpid == "28FA1228" || dcpid == "3668C018") continue;
                     var url = $"https://service.eumetsat.int/dcswebservice/dcpAdmin.do?action=ACTION_DOWNLOAD&id={dcpid}&user={appSettings.User}&pass={appSettings.Pass}";
 
                     var response = await httpClient.GetAsync(url, stoppingToken);
@@ -70,6 +68,11 @@ namespace EmusatWorkerService
                             bool success = await context.SaveChangesAsync(stoppingToken) > 0;
                             if (success) _logger.LogInformation("Added Station {dcpid} at {time}", dcpid, DateTimeOffset.Now);
                         }
+                        var lastEntryDate = await context.SensorData
+                            .OrderByDescending(x => x.TimeStamp)
+                            .Select(x => x.TimeStamp)
+                            .FirstOrDefaultAsync(stoppingToken)
+                            ?? DateTime.UtcNow.AddMonths(-2);
 
                         int entryNum = 0;
                         int entryCount = CountSequenceOccurrences(bytes, eotSequence);
@@ -132,12 +135,14 @@ namespace EmusatWorkerService
                                 }
                                 throw new ArgumentException("Invalid ByteArray");
                             }
-                            AddFromBytes(bytes);
-                            void AddFromBytes(byte[] bytes)
+                            var success = AddFromBytes(bytes);
+                            bool AddFromBytes(byte[] bytes)
                             {
                                 var row = bytes[offset..(offset + linewidth)].AsSpan();
                                 var values = ProcessSegment(row[(hgIndex - 0x5)..linewidth]).Split(' ');
                                 Console.WriteLine(string.Join(" ", values));
+                                var timestamp = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]), "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture).ToUniversalTime();
+                                if (timestamp < lastEntryDate) return false;
                                 data.Add(new SensorData
                                 {
                                     StationId = station.Id,
@@ -148,9 +153,9 @@ namespace EmusatWorkerService
                                         : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
                                         : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
                                         : double.Parse(values[7].Length >= 4 ? values[7][..4] : "0"),
-                                    TimeStamp = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]), "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture).ToUniversalTime(),
+                                    TimeStamp = timestamp,
                                 });
-                                return;
+                                return true;
                             }
                             static string ProcessSegment(Span<byte> bytes)
                             {
@@ -164,7 +169,13 @@ namespace EmusatWorkerService
                                 }
                                 return Encoding.ASCII.GetString(bytes);
                             }
-                            Console.WriteLine($"Entries: {entryNum+=1}:{entryCount}");
+                            if (!success)
+                            {
+                                Console.WriteLine($"Entry {entryNum += 1}:{entryCount} Date is earlier than Last saved Entry");
+                                break;
+                            };
+
+                            Console.WriteLine($"Entries: {entryNum += 1}:{entryCount}");
                             offset += linewidth;
                         }
                         await context.SensorData.AddRangeAsync(data, stoppingToken);
