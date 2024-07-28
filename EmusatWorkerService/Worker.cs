@@ -171,8 +171,7 @@ namespace EmusatWorkerService
                             }
                             if (!success)
                             {
-                                Console.WriteLine($"Entry {entryNum += 1}:{entryCount} Date is earlier than Last saved Entry");
-                                break;
+                                Console.WriteLine($"Skipping Entry {entryNum += 1}:{entryCount} Date is earlier than Last saved Entry");
                             };
 
                             Console.WriteLine($"Entries: {entryNum += 1}:{entryCount}");
