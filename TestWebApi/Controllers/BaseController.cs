@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using TestWebApi.DTOs;
 using TestWebApi.Extensions;
 
 namespace TestWorkerService.Controller
@@ -29,6 +30,14 @@ namespace TestWorkerService.Controller
                     x.ExternalId,
                     x.SourceAddress,
                     x.CreatedAt,
+                    LastData = x.SensorData.OrderByDescending(x => x.TimeStamp)
+                        .Select(x => new
+                        {
+                            x.TimeStamp,
+                            x.WL,
+                            x.BatteryVoltage,
+                            x.Record,
+                        }).FirstOrDefault(),
                 })
                 .Skip(parameters.Skip)
                 .Take(parameters.Take)
@@ -91,6 +100,14 @@ namespace TestWorkerService.Controller
                     x.ExternalId,
                     x.SourceAddress,
                     x.CreatedAt,
+                    LastData = x.SensorData.OrderByDescending(x => x.TimeStamp)
+                        .Select(x => new
+                        {
+                            x.TimeStamp,
+                            x.WL,
+                            x.BatteryVoltage,
+                            x.Record,
+                        }).FirstOrDefault(),
                 })
                 .Skip(parameters.Skip)
                 .Take(parameters.Take)
@@ -128,6 +145,18 @@ namespace TestWorkerService.Controller
             var count = await query.CountAsync();
 
             return Ok(new { count, data });
+        }
+
+        [HttpPut("{id:long}")]
+        public async Task<IActionResult> UpdateStation(long id, [FromBody] StationUpdateDto stationUpdate)
+        {
+            var station = await dataContext.Stations.AsTracking().FirstAsync(x => x.Id == id);
+            station.Lat = stationUpdate.Lat ?? station.Lat;
+            station.Lng = stationUpdate.Lng ?? station.Lng;
+            station.Name = string.IsNullOrEmpty(stationUpdate.Name) ? station.Name : stationUpdate.Name;
+
+            if (await dataContext.SaveChangesAsync() > 0) return Ok("Success");
+            return BadRequest("Failed for somereason");
         }
     }
 }
