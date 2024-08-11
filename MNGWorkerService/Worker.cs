@@ -70,7 +70,7 @@ namespace MNGWorkerService
                                 stations.Add(station);
                             }
                             sensorData.AddRange(response.data.Where(x => x.created_at > LastEntryDate));
-                            if (response.data.First().created_at < LastEntryDate) break;
+                            if (response.data.First().created_at <= LastEntryDate) break;
                         }
                     }
 
