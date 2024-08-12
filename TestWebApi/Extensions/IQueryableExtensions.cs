@@ -17,6 +17,7 @@ namespace TestWebApi.Extensions
             {
                 "createdat" => source.OrderByExpression(x => x.CreatedAt, sortDirection),
                 "name" => source.OrderByExpression(x => x.Name, sortDirection),
+                "timestamp" => source.OrderByExpression(x => x.SensorData.OrderByDescending(x => x.TimeStamp).First().TimeStamp, sortDirection),
                 _ => source.OrderByExpression(x => x.Name, sortDirection),
             };
         }
