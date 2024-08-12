@@ -141,7 +141,8 @@ namespace EmusatWorkerService
                                 var row = bytes[offset..(offset + linewidth)].AsSpan();
                                 var values = ProcessSegment(row[(hgIndex - 0x5)..linewidth]).Split(' ');
                                 Console.WriteLine(string.Join(" ", values));
-                                var timestamp = DateTime.SpecifyKind(DateTime.ParseExact(ProcessSegment(row[0x37..0x48]), "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture), DateTimeKind.Utc);
+                                var times = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]), "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture);
+                                var timestamp = DateTime.SpecifyKind(times, DateTimeKind.Utc);
                                 if (timestamp <= lastEntryDate) return false;
                                 data.Add(new SensorData
                                 {
