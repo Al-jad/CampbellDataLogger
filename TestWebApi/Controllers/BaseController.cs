@@ -1,12 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using TestWebApi;
 using TestWebApi.DTOs;
 using TestWebApi.Extensions;
 
@@ -19,24 +19,24 @@ namespace TestWorkerService.Controller
     {
         private readonly ApiAppSettings appSettings = config.Get<ApiAppSettings>() ?? throw new InvalidOperationException("Missing AppSetting.SecretKey");
 
-        //[HttpPost("register")]
-        //public async Task<ActionResult> RegisterUser(SigningDto registerRequest)
-        //{
-        //    if (registerRequest == null)
-        //    {
-        //        return BadRequest("Invalid register request");
-        //    }
-        //    var user = new IdentityUser<long>(userName: registerRequest.Username);
+        [HttpPost("register")]
+        public async Task<ActionResult> RegisterUser(SigningDto registerRequest)
+        {
+            if (registerRequest == null)
+            {
+                return BadRequest("Invalid register request");
+            }
+            var user = new IdentityUser<long>(userName: registerRequest.Username);
 
-        //    var result = await userManager.CreateAsync(user, registerRequest.Password);
+            var result = await userManager.CreateAsync(user, registerRequest.Password);
 
-        //    if (result.Succeeded)
-        //    {
-        //        return Ok();
-        //    }
+            if (result.Succeeded)
+            {
+                return Ok();
+            }
 
-        //    return BadRequest("Invalid register request");
-        //}
+            return BadRequest("Invalid register request");
+        }
 
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(SigningDto loginRequest)
@@ -69,6 +69,7 @@ namespace TestWorkerService.Controller
             return BadRequest("Invalid credentials");
         }
     }
+
     [Authorize]
     public class FakharController(SensorDataContext dataContext) : BaseController
     {
@@ -120,26 +121,79 @@ namespace TestWorkerService.Controller
                 (!parameters.StationId.HasValue || x.StationId == parameters.StationId) &&
                 (x.Station == null || x.Station.SourceAddress == "alfakhar.co"));
 
-            var data = await query
-                .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.TimeStamp,
-                    x.WL,
-                    x.BatteryVoltage,
-                    x.Record,
-                    Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
-                })
-                .Skip(parameters.Skip)
-                .Take(parameters.Take)
-                .ToListAsync();
+            object data = parameters.Period switch
+            {
+                //Period.Daily => await query
+                //    .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
+                //    .GroupBy(x => x.TimeStamp!.Value.Day)
+                //    .Select(g => g.Select(x => new
+                //    {
+                //        x.Id,
+                //        x.TimeStamp,
+                //        x.WL,
+                //        x.BatteryVoltage,
+                //        x.Record,
+                //        Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
+                //    }))
+                //    .Skip(parameters.Skip)
+                //    .Take(parameters.Take)
+                //    .ToListAsync(),
+
+                //Period.Monthly => await query
+                //    .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
+                //    .GroupBy(x => x.TimeStamp!.Value.Month)
+                //    .Select(g => g.Select(x => new
+                //    {
+                //        x.Id,
+                //        x.TimeStamp,
+                //        x.WL,
+                //        x.BatteryVoltage,
+                //        x.Record,
+                //        Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
+                //    }))
+                //    .Skip(parameters.Skip)
+                //    .Take(parameters.Take)
+                //    .ToListAsync(),
+
+                //Period.Yearly => await query
+                //    .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
+                //    .GroupBy(x => x.TimeStamp!.Value.Year)
+                //    .Select(g => g.Select(x => new
+                //    {
+                //        x.Id,
+                //        x.TimeStamp,
+                //        x.WL,
+                //        x.BatteryVoltage,
+                //        x.Record,
+                //        Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
+                //    }))
+                //    .Skip(parameters.Skip)
+                //    .Take(parameters.Take)
+                //    .ToListAsync(),
+
+                _ => await query
+                    .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
+                    .Select(x => new
+                    {
+                        x.Id,
+                        x.TimeStamp,
+                        x.WL,
+                        x.BatteryVoltage,
+                        x.Record,
+                        Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
+                    })
+                    .Skip(parameters.Skip)
+                    .Take(parameters.Take)
+                    .ToListAsync()
+            };
+
 
             var count = await query.CountAsync();
 
             return Ok(new { count, data });
         }
     }
+
     [Authorize]
     public class DataPortalController(SensorDataContext dataContext) : BaseController
     {
@@ -192,20 +246,107 @@ namespace TestWorkerService.Controller
                 (!parameters.StationId.HasValue || x.StationId == parameters.StationId) &&
                 x.Station != null && x.Station.SourceAddress != "alfakhar.co");
 
-            var data = await query
-                .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.TimeStamp,
-                    WL = (x.Station != null && x.Station.SourceAddress == "waterresourcesmng.website" && x.WL.Length > 2) ? $"{x.WL.Insert(x.WL.Length - 2, ".")}" : x.WL,
-                    x.BatteryVoltage,
-                    x.Record,
-                    Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
-                })
-                .Skip(parameters.Skip)
-                .Take(parameters.Take)
-                .ToListAsync();
+            object data = parameters.Period switch
+            {
+                Period.Daily when parameters.StationId.HasValue => (await query
+                    .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
+                    .GroupBy(x => x.TimeStamp!.Value.Day)
+                    .Select(g => new
+                    {
+                        TimeStamp = g.Select(x => x.TimeStamp!.Value).First(),
+                        WL = g.Select(x => x.WL).ToArray(),
+                        BatteryVoltage = g.Average(x => x.BatteryVoltage),
+                        Station = g.Select(x => x.Station != null ? new { x.Station.Name, x.Station.Id, x.Station.SourceAddress } : null).First(),
+                    })
+                    .Skip(parameters.Skip)
+                    .Take(parameters.Take)
+                    .ToListAsync()).Select(x => x.Station!.SourceAddress != "waterresourcesmng.website" ? new 
+                    { 
+                        x.TimeStamp,
+                        WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase)).Average(x => float.Parse(x)), 2),
+                        BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
+                        x.Station
+                    } :
+                    new
+                    {
+                        x.TimeStamp,
+                        WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase))
+                            .Average(x => float.Parse(x.Length > 2 ? $"{x.Insert(x.Length - 2, ".")}" : x)), 2),
+                        BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
+                        x.Station
+                    }),
+
+                Period.Monthly when parameters.StationId.HasValue => (await query
+                    .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
+                    .GroupBy(x => x.TimeStamp!.Value.Day)
+                    .Select(g => new
+                    {
+                        TimeStamp = g.Select(x => x.TimeStamp!.Value).First(),
+                        WL = g.Select(x => x.WL).ToArray(),
+                        BatteryVoltage = g.Average(x => x.BatteryVoltage),
+                        Station = g.Select(x => x.Station != null ? new { x.Station.Name, x.Station.Id, x.Station.SourceAddress } : null).First(),
+                    })
+                    .Skip(parameters.Skip)
+                    .Take(parameters.Take)
+                    .ToListAsync()).Select(x => x.Station!.SourceAddress != "waterresourcesmng.website" ? new
+                    {
+                        x.TimeStamp,
+                        WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase)).Average(x => float.Parse(x)), 2),
+                        BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
+                        x.Station
+                    } :
+                    new
+                    {
+                        x.TimeStamp,
+                        WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase))
+                            .Average(x => float.Parse(x.Length > 2 ? $"{x.Insert(x.Length - 2, ".")}" : x)), 2),
+                        BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
+                        x.Station
+                    }),
+
+                Period.Yearly when parameters.StationId.HasValue => (await query
+                    .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
+                    .GroupBy(x => x.TimeStamp!.Value.Day)
+                    .Select(g => new
+                    {
+                        TimeStamp = g.Select(x => x.TimeStamp!.Value).First(),
+                        WL = g.Select(x => x.WL).ToArray(),
+                        BatteryVoltage = g.Average(x => x.BatteryVoltage),
+                        Station = g.Select(x => x.Station != null ? new { x.Station.Name, x.Station.Id, x.Station.SourceAddress } : null).First(),
+                    })
+                    .Skip(parameters.Skip)
+                    .Take(parameters.Take)
+                    .ToListAsync()).Select(x => x.Station!.SourceAddress != "waterresourcesmng.website" ? new
+                    {
+                        x.TimeStamp,
+                        WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase)).Average(x => float.Parse(x)), 2),
+                        BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
+                        x.Station
+                    } :
+                    new
+                    {
+                        x.TimeStamp,
+                        WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase))
+                            .Average(x => float.Parse(x.Length > 2 ? $"{x.Insert(x.Length - 2, ".")}" : x)), 2),
+                        BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
+                        x.Station
+                    }),
+
+                _ => await query
+                    .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
+                    .Select(x => new
+                    {
+                        x.Id,
+                        x.TimeStamp,
+                        WL = (x.Station != null && x.Station.SourceAddress == "waterresourcesmng.website" && x.WL.Length > 2) ? $"{x.WL.Insert(x.WL.Length - 2, ".")}" : x.WL,
+                        x.BatteryVoltage,
+                        x.Record,
+                        Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
+                    })
+                    .Skip(parameters.Skip)
+                    .Take(parameters.Take)
+                    .ToListAsync()
+            };
 
             var count = await query.CountAsync();
 

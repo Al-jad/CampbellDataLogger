@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Serialization;
+using TestWebApi;
 
 namespace TestWorkerService
 {
@@ -27,6 +28,7 @@ namespace TestWorkerService
         public DateTime? DateMin { get => _dateMin; init => _dateMin = value.HasValue ? value.Value.ToUniversalTime() : null; }
         private readonly DateTime? _dateMax;
         public DateTime? DateMax { get => _dateMax; init => _dateMax = value.HasValue ? value.Value.ToUniversalTime() : null; }
+        public Period? Period { get; init; }
     }
 
     public class StationRequestParameters : RequestParameters
