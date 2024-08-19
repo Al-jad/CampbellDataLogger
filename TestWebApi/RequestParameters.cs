@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using TestWebApi;
 
 namespace TestWorkerService
@@ -29,6 +30,16 @@ namespace TestWorkerService
         private readonly DateTime? _dateMax;
         public DateTime? DateMax { get => _dateMax; init => _dateMax = value.HasValue ? value.Value.ToUniversalTime() : null; }
         public Period? Period { get; init; }
+    }
+    public class SensorAveragesRequestParameters : RequestParameters
+    {
+        [Required] public long StationId { get; init; }
+        [Required] public Period Period { get; init; }
+
+        private readonly DateTime? _dateMin;
+        public DateTime? DateMin { get => _dateMin; init => _dateMin = value.HasValue ? value.Value.ToUniversalTime() : null; }
+        private readonly DateTime? _dateMax;
+        public DateTime? DateMax { get => _dateMax; init => _dateMax = value.HasValue ? value.Value.ToUniversalTime() : null; }
     }
 
     public class StationRequestParameters : RequestParameters
