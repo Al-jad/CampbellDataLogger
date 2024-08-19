@@ -152,12 +152,13 @@ namespace TestWorkerService.Controller
                 (x.Station == null || x.Station.SourceAddress == "alfakhar.co"));
 
 
-            var dataQuery = parameters.Period switch
+            IQueryable<IGrouping<object, SensorData>> dataQuery = parameters.Period switch
             {
-                Period.Daily => query.OrderbySensorData(parameters.SortingKey, parameters.SortingDirection).GroupBy(x => x.TimeStamp!.Value.Day),
-                Period.Monthly => query.OrderbySensorData(parameters.SortingKey, parameters.SortingDirection).GroupBy(x => x.TimeStamp!.Value.Month),
-                Period.Yearly => query.OrderbySensorData(parameters.SortingKey, parameters.SortingDirection).GroupBy(x => x.TimeStamp!.Value.Year),
-                _ => query.GroupBy(x => x.TimeStamp!.Value.Hour)
+                Period.Hourly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day, x.TimeStamp!.Value.Hour }),
+                Period.Daily => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day }),
+                Period.Monthly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month }),
+                Period.Yearly => query.GroupBy(x => new { x.TimeStamp!.Value.Year }),
+                _ => throw new NotImplementedException(),
             };
 
             var data = (
@@ -167,17 +168,32 @@ namespace TestWorkerService.Controller
                     WL = g.Select(x => x.WL).ToArray(),
                     BatteryVoltage = g.Average(x => x.BatteryVoltage),
                     Station = g.Select(x => x.Station != null ? new { x.Station.Name, x.Station.Id, x.Station.SourceAddress } : null).First(),
-                }).Skip(parameters.Skip).Take(parameters.Take).ToListAsync())
+                }).OrderByExpression(x => x.TimeStamp, parameters.SortingDirection)
+                .Skip(parameters.Skip).Take(parameters.Take).ToListAsync())
                 .Select(x => x.Station!.SourceAddress != "waterresourcesmng.website" ? new
                 {
-                    x.TimeStamp,
+                    TimeStamp = parameters.Period switch
+                    {
+                        Period.Hourly => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
+                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
+                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
+                        Period.Yearly => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
+                        _ => throw new ArgumentException("Invalid period type")
+                    },
                     WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase)).Average(x => float.Parse(x)), 2),
                     BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
                     x.Station
                 } :
                 new
                 {
-                    x.TimeStamp,
+                    TimeStamp = parameters.Period switch
+                    {
+                        Period.Hourly => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
+                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
+                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
+                        Period.Yearly => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
+                        _ => throw new ArgumentException("Invalid period type")
+                    },
                     WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase))
                         .Average(x => float.Parse(x.Length > 2 ? $"{x.Insert(x.Length - 2, ".")}" : x)), 2),
                     BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
@@ -270,19 +286,19 @@ namespace TestWorkerService.Controller
                 (x.StationId == parameters.StationId) &&
                 (x.Station == null || x.Station.SourceAddress != "alfakhar.co"));
 
-
-            var dataQuery = parameters.Period switch
+            IQueryable<IGrouping<object, SensorData>> dataQuery = parameters.Period switch
             {
-                Period.Daily => query.GroupBy(x => x.TimeStamp!.Value.Day),
-                Period.Monthly => query.GroupBy(x => x.TimeStamp!.Value.Month),
-                Period.Yearly => query.GroupBy(x => x.TimeStamp!.Value.Year),
-                _ => query.GroupBy(x => x.TimeStamp!.Value.Hour)
+                Period.Hourly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day, x.TimeStamp!.Value.Hour }),
+                Period.Daily => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day }),
+                Period.Monthly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month }),
+                Period.Yearly => query.GroupBy(x => new { x.TimeStamp!.Value.Year }),
+                _ => throw new NotImplementedException(),
             };
 
             var data = (
                 await dataQuery.Select(g => new
                 {
-                    TimeStamp = DateOnly.FromDateTime(g.Select(x => x.TimeStamp!.Value).First()),
+                    TimeStamp = g.Select(x => x.TimeStamp!.Value).First(),
                     WL = g.Select(x => x.WL).ToArray(),
                     BatteryVoltage = g.Average(x => x.BatteryVoltage),
                     Station = g.Select(x => x.Station != null ? new { x.Station.Name, x.Station.Id, x.Station.SourceAddress } : null).First(),
@@ -290,14 +306,28 @@ namespace TestWorkerService.Controller
                 .Skip(parameters.Skip).Take(parameters.Take).ToListAsync())
                 .Select(x => x.Station!.SourceAddress != "waterresourcesmng.website" ? new
                 {
-                    x.TimeStamp,
+                    TimeStamp = parameters.Period switch
+                    {
+                        Period.Hourly => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
+                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
+                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
+                        Period.Yearly => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
+                        _ => throw new ArgumentException("Invalid period type")
+                    },
                     WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase)).Average(x => float.Parse(x)), 2),
                     BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
                     x.Station
                 } :
                 new
                 {
-                    x.TimeStamp,
+                    TimeStamp = parameters.Period switch
+                    {
+                        Period.Hourly => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
+                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
+                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
+                        Period.Yearly => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
+                        _ => throw new ArgumentException("Invalid period type")
+                    },
                     WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase))
                         .Average(x => float.Parse(x.Length > 2 ? $"{x.Insert(x.Length - 2, ".")}" : x)), 2),
                     BatteryVoltage = x.BatteryVoltage.HasValue ? (double?)Math.Round(x.BatteryVoltage.Value, 2) : null,
