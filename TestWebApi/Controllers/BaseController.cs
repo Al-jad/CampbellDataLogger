@@ -154,10 +154,10 @@ namespace TestWorkerService.Controller
 
             IQueryable<IGrouping<object, SensorData>> dataQuery = parameters.Period switch
             {
-                Period.Hourly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day, x.TimeStamp!.Value.Hour }),
-                Period.Daily => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day }),
-                Period.Monthly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month }),
-                Period.Yearly => query.GroupBy(x => new { x.TimeStamp!.Value.Year }),
+                Period.Daily => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day, x.TimeStamp!.Value.Hour }),
+                Period.Monthly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day }),
+                Period.Yearly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month }),
+                Period.What => query.GroupBy(x => new { x.TimeStamp!.Value.Year }),
                 _ => throw new NotImplementedException(),
             };
 
@@ -174,10 +174,10 @@ namespace TestWorkerService.Controller
                 {
                     TimeStamp = parameters.Period switch
                     {
-                        Period.Hourly => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
-                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
-                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
-                        Period.Yearly => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
+                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
+                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
+                        Period.Yearly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
+                        Period.What => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
                         _ => throw new ArgumentException("Invalid period type")
                     },
                     WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase)).Average(x => float.Parse(x)), 2),
@@ -188,10 +188,10 @@ namespace TestWorkerService.Controller
                 {
                     TimeStamp = parameters.Period switch
                     {
-                        Period.Hourly => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
-                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
-                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
-                        Period.Yearly => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
+                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
+                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
+                        Period.Yearly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
+                        Period.What => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
                         _ => throw new ArgumentException("Invalid period type")
                     },
                     WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase))
@@ -288,10 +288,10 @@ namespace TestWorkerService.Controller
 
             IQueryable<IGrouping<object, SensorData>> dataQuery = parameters.Period switch
             {
-                Period.Hourly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day, x.TimeStamp!.Value.Hour }),
-                Period.Daily => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day }),
-                Period.Monthly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month }),
-                Period.Yearly => query.GroupBy(x => new { x.TimeStamp!.Value.Year }),
+                Period.Daily => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day, x.TimeStamp!.Value.Hour }),
+                Period.Monthly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month, x.TimeStamp!.Value.Day }),
+                Period.Yearly => query.GroupBy(x => new { x.TimeStamp!.Value.Year, x.TimeStamp!.Value.Month }),
+                Period.What => query.GroupBy(x => new { x.TimeStamp!.Value.Year }),
                 _ => throw new NotImplementedException(),
             };
 
@@ -308,10 +308,10 @@ namespace TestWorkerService.Controller
                 {
                     TimeStamp = parameters.Period switch
                     {
-                        Period.Hourly => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
-                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
-                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
-                        Period.Yearly => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
+                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
+                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
+                        Period.Yearly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
+                        Period.What => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
                         _ => throw new ArgumentException("Invalid period type")
                     },
                     WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase)).Average(x => float.Parse(x)), 2),
@@ -322,10 +322,10 @@ namespace TestWorkerService.Controller
                 {
                     TimeStamp = parameters.Period switch
                     {
-                        Period.Hourly => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
-                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
-                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
-                        Period.Yearly => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
+                        Period.Daily => x.TimeStamp!.ToString("yyyy-MM-ddTHH:00Z"), // Date and Hour (e.g., 2024-08-19T15:00Z)
+                        Period.Monthly => x.TimeStamp!.ToString("yyyy-MM-dd"), // Date only (e.g., 2024-08-19)
+                        Period.Yearly => x.TimeStamp!.ToString("yyyy-MM"), // Month and Year (e.g., 2024-08)
+                        Period.What => x.TimeStamp!.ToString("yyyy"), // Year only (e.g., 2024)
                         _ => throw new ArgumentException("Invalid period type")
                     },
                     WL = Math.Round(x.WL.Where(x => !x.Equals("M", StringComparison.OrdinalIgnoreCase))
