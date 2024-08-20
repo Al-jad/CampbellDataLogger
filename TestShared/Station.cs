@@ -1,4 +1,7 @@
-﻿namespace TestWorkerService;
+﻿using System.ComponentModel.DataAnnotations;
+using TestShared;
+
+namespace TestWorkerService;
 
 public class Station
 {
@@ -6,6 +9,7 @@ public class Station
     public string? ExternalId { get; set; }
     public required string SourceAddress { get; set; }
     public required string Name { get; set; }
+    [StringLength(16)] public string? City { get; set; }
     public string? DataFile { get; set; }
     public string? UploadedDataFile { get; set; }
     public double? Lat { get; set; }
@@ -14,6 +18,7 @@ public class Station
     public List<string> Images { get; set; } = [];
     public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
     public List<SensorData> SensorData { get; set; } = [];
+    public List<ManualData> ManualData { get; set; } = [];
 }
 
 public class ApiAppSettings
