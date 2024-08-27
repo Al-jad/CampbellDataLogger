@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -78,6 +77,7 @@ namespace TestWorkerService.Controller
         {
             var query = dataContext.Stations.Where(x =>
                 (string.IsNullOrEmpty(parameters.Name) || x.Name.Contains(parameters.Name)) &&
+                (string.IsNullOrEmpty(parameters.City) || (x.City != null && x.City.Contains(parameters.City))) &&
                 (string.IsNullOrEmpty(parameters.ExternalId) || x.ExternalId == parameters.ExternalId) &&
                 x.SourceAddress == "alfakhar.co");
 
@@ -93,6 +93,7 @@ namespace TestWorkerService.Controller
                     x.ExternalId,
                     x.SourceAddress,
                     x.Images,
+                    x.City,
                     x.CreatedAt,
                     LastData = x.SensorData.OrderByDescending(x => x.TimeStamp)
                         .Select(x => new
@@ -347,6 +348,7 @@ namespace TestWorkerService.Controller
             station.Lng = stationUpdate.Lng ?? station.Lng;
             station.Images = stationUpdate.Images ?? station.Images;
             station.Name = string.IsNullOrEmpty(stationUpdate.Name) ? station.Name : stationUpdate.Name;
+            station.City = string.IsNullOrEmpty(stationUpdate.City) ? station.City : stationUpdate.City;
             station.Description = string.IsNullOrEmpty(stationUpdate.Description) ? station.Description : stationUpdate.Description;
 
             if (await dataContext.SaveChangesAsync() > 0) return Ok("Success");

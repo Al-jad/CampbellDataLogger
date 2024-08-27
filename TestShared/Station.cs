@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿
+using System.ComponentModel.DataAnnotations;
 using TestShared;
 
 namespace TestWorkerService;
@@ -9,7 +10,7 @@ public class Station
     public string? ExternalId { get; set; }
     public required string SourceAddress { get; set; }
     public required string Name { get; set; }
-    [StringLength(16)] public string? City { get; set; }
+    [StringLength(40)] public string? City { get; set; }
     public string? DataFile { get; set; }
     public string? UploadedDataFile { get; set; }
     public double? Lat { get; set; }

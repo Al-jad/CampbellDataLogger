@@ -44,7 +44,8 @@ namespace TestWorkerService
 
     public class StationRequestParameters : RequestParameters
     {
-        public string? SourceAddress { get; init; }
+        public string? SourceAddress { get; init;
+        public string? City { get; init; }
         public string? Name { get; init; }
         public string? ExternalId { get; init; }
 
