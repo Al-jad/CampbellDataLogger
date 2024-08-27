@@ -230,6 +230,7 @@ namespace TestWorkerService.Controller
                     x.ExternalId,
                     x.SourceAddress,
                     x.Images,
+                    x.City,
                     x.CreatedAt,
                     LastData = x.SensorData.OrderByDescending(x => x.TimeStamp)
                         .Select(d => new
