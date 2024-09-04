@@ -92,91 +92,98 @@ namespace EmusatWorkerService
 
                         int offset = 0;
                         List<SensorData> data = [];
-                        while (offset < bytes.Length)
+                        try
                         {
-                            int linewidth = FindSequence(bytes, eotSequence, offset) + 0x4 - offset;
-                            static int FindSequence(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence, int offset = 0)
+                            while (offset < bytes.Length)
                             {
-                                if (sequence.Length < span.Length)
+                                int linewidth = FindSequence(bytes, eotSequence, offset) + 0x4 - offset;
+                                static int FindSequence(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence, int offset = 0)
                                 {
-                                    for (int i = offset; i <= span.Length - sequence.Length; i++)
+                                    if (sequence.Length < span.Length)
                                     {
-                                        if (span.Slice(i, sequence.Length).SequenceEqual(sequence))
+                                        for (int i = offset; i <= span.Length - sequence.Length; i++)
                                         {
-                                            return i;
-                                        }
-                                    }
-                                }
-                                throw new ArgumentException("Invalid ByteArray");
-                            }
-
-                            int hgIndex = FindSequenceBitError(bytes, hgSequence, offset) - offset;
-                            static int FindSequenceBitError(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence, int offset = 0)
-                            {
-                                if (sequence.Length < span.Length)
-                                {
-                                    for (int i = offset; i <= span.Length - sequence.Length; i++)
-                                    {
-                                        int matches = 0;
-                                        // Count matching bytes at the current position
-                                        for (int j = 0; j < sequence.Length; j++)
-                                        {
-                                            if (span[i + j] == sequence[j])
+                                            if (span.Slice(i, sequence.Length).SequenceEqual(sequence))
                                             {
-                                                matches++;
+                                                return i;
                                             }
                                         }
-                                        // Check if the number of matches meets the required threshold 3
-                                        if (matches >= 3)
+                                    }
+                                    throw new ArgumentException("Invalid ByteArray");
+                                }
+
+                                int hgIndex = FindSequenceBitError(bytes, hgSequence, offset) - offset;
+                                static int FindSequenceBitError(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence, int offset = 0)
+                                {
+                                    if (sequence.Length < span.Length)
+                                    {
+                                        for (int i = offset; i <= span.Length - sequence.Length; i++)
                                         {
-                                            return i; // Return the starting index of the match
+                                            int matches = 0;
+                                            // Count matching bytes at the current position
+                                            for (int j = 0; j < sequence.Length; j++)
+                                            {
+                                                if (span[i + j] == sequence[j])
+                                                {
+                                                    matches++;
+                                                }
+                                            }
+                                            // Check if the number of matches meets the required threshold 3
+                                            if (matches >= 3)
+                                            {
+                                                return i; // Return the starting index of the match
+                                            }
                                         }
                                     }
+                                    throw new ArgumentException("Invalid ByteArray");
                                 }
-                                throw new ArgumentException("Invalid ByteArray");
-                            }
-                            var success = AddFromBytes(bytes);
-                            bool AddFromBytes(byte[] bytes)
-                            {
-                                var row = bytes[offset..(offset + linewidth)].AsSpan();
-                                var values = ProcessSegment(row[(hgIndex - 0x5)..linewidth]).Split(' ');
-                                Console.WriteLine(string.Join(" ", values));
-                                var times = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]), "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture);
-                                var timestamp = DateTime.SpecifyKind(times, DateTimeKind.Utc);
-                                if (timestamp <= lastEntryDate) return false;
-                                data.Add(new SensorData
+                                var success = AddFromBytes(bytes);
+                                bool AddFromBytes(byte[] bytes)
                                 {
-                                    StationId = station.Id,
-                                    WL = values[3],
-                                    BatteryVoltage
-                                        = double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
-                                        : double.TryParse(values[6], out double batteryVoltage2) ? batteryVoltage2
-                                        : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
-                                        : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
-                                        : double.Parse(values[7].Length >= 4 ? values[7][..4] : "0"),
-                                    TimeStamp = timestamp,
-                                });
-                                return true;
-                            }
-                            static string ProcessSegment(Span<byte> bytes)
-                            {
-                                for (int i = 0; i < bytes.Length; i++)
-                                {
-                                    if (bytes[i] > 0x80) bytes[i] -= 0x80;
-                                    if (bytes[i] >= 0x60) bytes[i] -= 0x40;
-                                    if (bytes[i] == 0x2A) bytes[i] = 0x2E;
-                                    if (bytes[i] == 0x24) bytes[i] = 0x20;
-                                    if (bytes[i] >= 0x3C && bytes[i] < 0x40) bytes[i] -= 0x04;
+                                    var row = bytes[offset..(offset + linewidth)].AsSpan();
+                                    var values = ProcessSegment(row[(hgIndex - 0x5)..linewidth]).Split(' ');
+                                    Console.WriteLine(string.Join(" ", values));
+                                    var times = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]), "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture);
+                                    var timestamp = DateTime.SpecifyKind(times, DateTimeKind.Utc);
+                                    if (timestamp <= lastEntryDate) return false;
+                                    data.Add(new SensorData
+                                    {
+                                        StationId = station.Id,
+                                        WL = values[3],
+                                        BatteryVoltage
+                                            = double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
+                                            : double.TryParse(values[6], out double batteryVoltage2) ? batteryVoltage2
+                                            : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
+                                            : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
+                                            : double.Parse(values[7].Length >= 4 ? values[7][..4] : "0"),
+                                        TimeStamp = timestamp,
+                                    });
+                                    return true;
                                 }
-                                return Encoding.ASCII.GetString(bytes);
-                            }
-                            if (!success)
-                            {
-                                Console.WriteLine($"Skipping Entry {entryNum += 1}:{entryCount} Date is earlier than Last saved Entry");
-                            };
+                                static string ProcessSegment(Span<byte> bytes)
+                                {
+                                    for (int i = 0; i < bytes.Length; i++)
+                                    {
+                                        if (bytes[i] > 0x80) bytes[i] -= 0x80;
+                                        if (bytes[i] >= 0x60) bytes[i] -= 0x40;
+                                        if (bytes[i] == 0x2A) bytes[i] = 0x2E;
+                                        if (bytes[i] == 0x24) bytes[i] = 0x20;
+                                        if (bytes[i] >= 0x3C && bytes[i] < 0x40) bytes[i] -= 0x04;
+                                    }
+                                    return Encoding.ASCII.GetString(bytes);
+                                }
+                                if (!success)
+                                {
+                                    Console.WriteLine($"Skipping Entry {entryNum += 1}:{entryCount} Date is earlier than Last saved Entry");
+                                };
 
-                            Console.WriteLine($"Entries: {entryNum += 1}:{entryCount}");
-                            offset += linewidth;
+                                Console.WriteLine($"Entries: {entryNum += 1}:{entryCount}");
+                                offset += linewidth;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.Message);
                         }
                         await context.SensorData.AddRangeAsync(data, stoppingToken);
                         _logger.LogInformation("Added {count} Sensor Data to station {dcpid} at {time}", await context.SaveChangesAsync(stoppingToken), dcpid, DateTimeOffset.Now);
