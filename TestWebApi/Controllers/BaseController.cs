@@ -88,6 +88,7 @@ namespace TestWorkerService.Controller
                     x.Id,
                     x.Name,
                     x.Description,
+                    x.Notes,
                     x.Lng,
                     x.Lat,
                     x.ExternalId,
@@ -225,6 +226,7 @@ namespace TestWorkerService.Controller
                     x.Id,
                     x.Name,
                     x.Description,
+                    x.Notes,
                     x.Lng,
                     x.Lat,
                     x.ExternalId,
@@ -351,6 +353,7 @@ namespace TestWorkerService.Controller
             station.Name = string.IsNullOrEmpty(stationUpdate.Name) ? station.Name : stationUpdate.Name;
             station.City = string.IsNullOrEmpty(stationUpdate.City) ? station.City : stationUpdate.City;
             station.Description = string.IsNullOrEmpty(stationUpdate.Description) ? station.Description : stationUpdate.Description;
+            station.Notes = string.IsNullOrEmpty(stationUpdate.Notes) ? station.Notes : stationUpdate.Notes;
 
             if (await dataContext.SaveChangesAsync() > 0) return Ok("Success");
             return BadRequest("Failed for somereason");
