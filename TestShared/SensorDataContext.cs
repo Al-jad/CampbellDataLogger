@@ -5,7 +5,7 @@ using TestShared;
 
 namespace TestWorkerService;
 
-public class SensorDataContext(DbContextOptions<SensorDataContext> options) : IdentityDbContext<IdentityUser<long>, IdentityRole<long>, long>(options)
+public class SensorDataContext(DbContextOptions<SensorDataContext> options) : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>(options)
 {
     public DbSet<SensorData> SensorData { get; set; }
     public DbSet<ManualData> ManualData { get; set; }
