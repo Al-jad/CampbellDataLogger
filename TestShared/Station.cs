@@ -38,6 +38,13 @@ public class EMUAppSettings : AppSettings
     public required string User { get; init; }
     public required string Pass { get; init; }
     public string[] DCPIDs { get; init; } = [];
+    public required Telegram Telegram { get; set; }
+}
+public class Telegram
+{
+    public required string AccessToken { get; init; }
+    public required string ChatId { get; init; }
+    public string? TopicId { get; init; }
 }
 public class MSGNAppSettings : AppSettings
 {
