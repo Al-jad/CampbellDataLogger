@@ -24,22 +24,15 @@ namespace TestWorkerService.Controller
         public async Task<ActionResult> RegisterUser(SigningDto registerRequest)
         {
             var currentUser = await userManager.GetUserAsync(User);
-            if (currentUser != null && !currentUser.IsAdmin)
-            {
-                return Unauthorized();
-            }
-            if (registerRequest == null)
-            {
-                return BadRequest("Invalid register request");
-            }
+            if (currentUser == null || !currentUser.IsAdmin) return Unauthorized();
+            
+            if (registerRequest == null) return BadRequest("Invalid register request"); 
+            
             var user = new ApplicationUser{ UserName = registerRequest.Username, };
 
             var result = await userManager.CreateAsync(user, registerRequest.Password);
 
-            if (result.Succeeded)
-            {
-                return Ok();
-            }
+            if (result.Succeeded) return Ok();
 
             return BadRequest("Invalid register request");
         }
@@ -48,10 +41,7 @@ namespace TestWorkerService.Controller
         public async Task<ActionResult<string>> Login(SigningDto loginRequest)
         {
             var user = await userManager.FindByNameAsync(loginRequest.Username);
-            if (user == null)
-            {
-                return BadRequest("Invalid credentials");
-            }
+            if (user == null) return BadRequest("Invalid credentials"); 
 
             var result = await signInManager.CheckPasswordSignInAsync(user, loginRequest.Password, false);
             if (result.Succeeded)
@@ -74,39 +64,32 @@ namespace TestWorkerService.Controller
 
             return BadRequest("Invalid credentials");
         }
+        
         [HttpGet("users")]
         public async Task<IActionResult> GetUsers()
         {
             var currentUser = await userManager.GetUserAsync(User);
-            if (currentUser != null && !currentUser.IsAdmin)
-            {
-                return Unauthorized();
-            }
+            if (currentUser == null || !currentUser.IsAdmin) return Unauthorized();
 
             var users = await userManager.Users.ToListAsync();
             return Ok(users);
         }
+        
         [Authorize]
         [HttpPut("{id}/accessibleCities")]
         public async Task<IActionResult> UpdateAccessibleCities(string id, [FromBody] List<string> accessibleCities)
         {
             var currentUser = await userManager.GetUserAsync(User);
-            if (currentUser != null && !currentUser.IsAdmin)
-            {
-                return Unauthorized();
-            }
+            if (currentUser == null || !currentUser.IsAdmin) return Unauthorized();
+            
             var user = await userManager.FindByIdAsync(id);
-            if (user == null)
-            {
-                return BadRequest("User not found");
-            }
+            if (user == null) return BadRequest("User not found"); 
 
             user.AccessibleCities = accessibleCities;
             await userManager.UpdateAsync(user);
 
             return Ok();
-        }        
-        
+        }
     }
     [Authorize]
     public class FakharController(SensorDataContext dataContext) : BaseController
