@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using TestShared;
 using TestWebApi;
 using TestWebApi.DTOs;
 using TestWebApi.Extensions;
@@ -15,37 +16,32 @@ namespace TestWorkerService.Controller
     [ApiController]
     [Route("[controller]")]
     public class BaseController : ControllerBase;
-    public class AuthController(UserManager<IdentityUser<long>> userManager, SignInManager<IdentityUser<long>> signInManager, IConfiguration config) : BaseController
+    public class AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, IConfiguration config) : BaseController
     {
         private readonly ApiAppSettings appSettings = config.Get<ApiAppSettings>() ?? throw new InvalidOperationException("Missing AppSetting.SecretKey");
+        [Authorize]
+        [HttpPost("register")]
+        public async Task<ActionResult> RegisterUser(SigningDto registerRequest)
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser == null || !currentUser.IsAdmin) return Unauthorized();
+            
+            if (registerRequest == null) return BadRequest("Invalid register request"); 
+            
+            var user = new ApplicationUser{ UserName = registerRequest.Username, };
 
-        //[HttpPost("register")]
-        //public async Task<ActionResult> RegisterUser(SigningDto registerRequest)
-        //{
-        //    if (registerRequest == null)
-        //    {
-        //        return BadRequest("Invalid register request");
-        //    }
-        //    var user = new IdentityUser<long>(userName: registerRequest.Username);
+            var result = await userManager.CreateAsync(user, registerRequest.Password);
 
-        //    var result = await userManager.CreateAsync(user, registerRequest.Password);
+            if (result.Succeeded) return Ok();
 
-        //    if (result.Succeeded)
-        //    {
-        //        return Ok();
-        //    }
-
-        //    return BadRequest("Invalid register request");
-        //}
+            return BadRequest("Invalid register request");
+        }
 
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(SigningDto loginRequest)
         {
             var user = await userManager.FindByNameAsync(loginRequest.Username);
-            if (user == null)
-            {
-                return BadRequest("Invalid credentials");
-            }
+            if (user == null) return BadRequest("Invalid credentials"); 
 
             var result = await signInManager.CheckPasswordSignInAsync(user, loginRequest.Password, false);
             if (result.Succeeded)
@@ -54,7 +50,7 @@ namespace TestWorkerService.Controller
                 var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
                 var tokenDescriptor = new SecurityTokenDescriptor
                 {
-                    Subject = new ClaimsIdentity([new(JwtRegisteredClaimNames.NameId, user.Id.ToString())]),
+                    Subject = new ClaimsIdentity([new Claim(JwtRegisteredClaimNames.NameId, user.Id.ToString())]),
                     Expires = DateTime.UtcNow.AddDays(7),
                     SigningCredentials = signingCredentials
                 };
@@ -67,6 +63,32 @@ namespace TestWorkerService.Controller
             }
 
             return BadRequest("Invalid credentials");
+        }
+        
+        [HttpGet("users")]
+        public async Task<IActionResult> GetUsers()
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser == null || !currentUser.IsAdmin) return Unauthorized();
+
+            var users = await userManager.Users.ToListAsync();
+            return Ok(users);
+        }
+        
+        [Authorize]
+        [HttpPut("{id}/accessibleCities")]
+        public async Task<IActionResult> UpdateAccessibleCities(string id, [FromBody] List<string> accessibleCities)
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser == null || !currentUser.IsAdmin) return Unauthorized();
+            
+            var user = await userManager.FindByIdAsync(id);
+            if (user == null) return BadRequest("User not found"); 
+
+            user.AccessibleCities = accessibleCities;
+            await userManager.UpdateAsync(user);
+
+            return Ok();
         }
     }
     [Authorize]
@@ -208,15 +230,19 @@ namespace TestWorkerService.Controller
         }
     }
     [Authorize]
-    public class DataPortalController(SensorDataContext dataContext) : BaseController
+    public class DataPortalController(UserManager<ApplicationUser> userManager, SensorDataContext dataContext) : BaseController
     {
         [HttpGet("station")]
         public async Task<IActionResult> GetStations([FromQuery] StationRequestParameters parameters)
         {
+            var user = await userManager.GetUserAsync(User);
+            
             var query = dataContext.Stations.Where(x =>
                 (string.IsNullOrEmpty(parameters.Name) || x.Name.Contains(parameters.Name)) &&
                 (string.IsNullOrEmpty(parameters.ExternalId) || x.ExternalId == parameters.ExternalId) &&
                 (string.IsNullOrEmpty(parameters.SourceAddress) || x.SourceAddress.Contains(parameters.SourceAddress)) &&
+                user != null && x.City != null &&
+                (user.IsAdmin || user.AccessibleCities.Contains(x.City)) &&
                 (!string.IsNullOrEmpty(parameters.SourceAddress) || x.SourceAddress != "alfakhar.co"));
 
             var data = await query
@@ -255,11 +281,15 @@ namespace TestWorkerService.Controller
         [HttpGet("data")]
         public async Task<IActionResult> GetData([FromQuery] SensorDataRequestParameters parameters)
         {
+            var user = await userManager.GetUserAsync(User);
             var query = dataContext.SensorData.Where(x =>
                 (!parameters.DateMax.HasValue || x.TimeStamp <= parameters.DateMax) &&
                 (!parameters.DateMin.HasValue || x.TimeStamp >= parameters.DateMin) &&
                 (!parameters.StationId.HasValue || x.StationId == parameters.StationId) &&
-                x.Station != null && x.Station.SourceAddress != "alfakhar.co");
+                user != null && x.Station != null && x.Station.City != null &&
+                (user.IsAdmin || user.AccessibleCities.Contains(x.Station!.City)) &&
+
+        x.Station != null && x.Station.SourceAddress != "alfakhar.co");
 
             var data = await query
                 .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
@@ -284,10 +314,14 @@ namespace TestWorkerService.Controller
         [HttpGet("averages")]
         public async Task<IActionResult> GetAverages([FromQuery] SensorAveragesRequestParameters parameters)
         {
+            var user = await userManager.GetUserAsync(User);
+            
             var query = dataContext.SensorData.Where(x =>
                 (!parameters.DateMax.HasValue || x.TimeStamp <= parameters.DateMax) &&
                 (!parameters.DateMin.HasValue || x.TimeStamp >= parameters.DateMin) &&
                 (x.StationId == parameters.StationId) &&
+                user != null && x.Station != null && x.Station.City != null &&
+                (user.IsAdmin || user.AccessibleCities.Contains(x.Station!.City)) &&
                 (x.Station == null || x.Station.SourceAddress != "alfakhar.co"));
 
             IQueryable<IGrouping<object, SensorData>> dataQuery = parameters.Period switch
@@ -346,6 +380,12 @@ namespace TestWorkerService.Controller
         [HttpPut("{id:long}")]
         public async Task<IActionResult> UpdateStation(long id, [FromBody] StationUpdateDto stationUpdate)
         {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser != null && !currentUser.IsAdmin)
+            {
+                return Unauthorized();
+            }
+
             var station = await dataContext.Stations.AsTracking().FirstAsync(x => x.Id == id);
             station.Lat = stationUpdate.Lat ?? station.Lat;
             station.Lng = stationUpdate.Lng ?? station.Lng;

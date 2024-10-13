@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json.Serialization;
+using TestShared;
 using TestWorkerService;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,7 +43,7 @@ builder.Services.AddSwaggerGen(c =>
     var securityRequirement = new OpenApiSecurityRequirement { { securitySchema, ["Bearer"] } };
     c.AddSecurityRequirement(securityRequirement);
 });
-builder.Services.AddIdentityCore<IdentityUser<long>>(opt =>
+builder.Services.AddIdentityCore<ApplicationUser>(opt =>
     {
         opt.Password.RequireDigit = false;
         opt.Password.RequiredLength = 2;
