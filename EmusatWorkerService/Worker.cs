@@ -170,6 +170,7 @@ namespace EmusatWorkerService
                                             if (bytes[i] >= 0x60) bytes[i] -= 0x40;
                                             if (bytes[i] == 0x2A) bytes[i] = 0x2E;
                                             if (bytes[i] == 0x24) bytes[i] = 0x20;
+                                            if (bytes[i] == 0x00) bytes[i] = 0x20;
                                             if (bytes[i] >= 0x3C && bytes[i] < 0x40) bytes[i] -= 0x04;
                                         }
                                         return Encoding.ASCII.GetString(bytes);
