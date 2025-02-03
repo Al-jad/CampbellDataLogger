@@ -51,11 +51,15 @@ namespace MNGWorkerService
                         }
                     }
 
-                    DateTime? LastEntryDate = await context.SensorData
+                    var lastEntryDates = await context.SensorData
                         .Where(x => x.Station != null && x.Station.SourceAddress == appSettings.SourceAddress && x.TimeStamp != null)
-                        .OrderByDescending(x => x.TimeStamp)
-                        .Select(x => x.TimeStamp)
-                        .FirstOrDefaultAsync(cancellationToken: stoppingToken);
+                        .GroupBy(x => x.Station!.ExternalId!)
+                        .ToDictionaryAsync(
+                            group => group.Key, // The station's external ID as the key
+                            group => group.Max(x => x.TimeStamp) // The latest timestamp for that station
+                        );
+
+                    var minDate = lastEntryDates.Values.Where(x => x.Value > DateTime.UtcNow.AddDays(-7)).Min();
 
                     HashSet<MainDataStation> stations = [];
                     List<MainDataSensor> sensorData = [];
@@ -69,8 +73,8 @@ namespace MNGWorkerService
                             {
                                 stations.Add(station);
                             }
-                            sensorData.AddRange(response.data.Where(x => x.created_at > LastEntryDate));
-                            if (response.data.First().created_at <= LastEntryDate) break;
+                            sensorData.AddRange(response.data.Where(x => x.created_at > minDate));
+                            if (response.data.First().created_at <= minDate) break;
                         }
                     }
 
@@ -95,10 +99,11 @@ namespace MNGWorkerService
 
                     foreach (var station in currentStations)
                     {
-                        var sensordata = sensorData.Where(s => s.stations_id.ToString() == station.ExternalId).Select(x => new SensorData
+                        var sensordata = sensorData.Where(s => s.stations_id.ToString() == station.ExternalId
+                            && s.created_at > lastEntryDates.GetValueOrDefault(station.ExternalId)).Select(x => new SensorData
                         {
                             TimeStamp = DateTime.TryParse($"{x.DATE} {x.TIME}", out DateTime parsedDate)
-                                ? parsedDate.ToUniversalTime()
+                                ? DateTime.SpecifyKind(parsedDate.AddHours(-3), DateTimeKind.Utc)
                                 : null,
                             Record = (int)x.id,
                             WL = x.LEVEl.ToString(),
