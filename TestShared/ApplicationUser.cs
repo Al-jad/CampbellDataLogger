@@ -4,6 +4,7 @@ namespace TestShared;
 
 public class ApplicationUser : IdentityUser<long>
 {
-    public List<string> AccessibleCities { get; set; } = new List<string>();
+    public List<string> AccessibleCities { get; set; } = [];
+    public List<long> AccessibleStationIds { get; set; } = [];
     public bool IsAdmin { get; set; }
 }

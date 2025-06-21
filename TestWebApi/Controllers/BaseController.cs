@@ -90,7 +90,25 @@ namespace TestWorkerService.Controller
 
             return Ok();
         }
+
+
+        [Authorize]
+        [HttpPut("{id}/AccessibleStationIds")]
+        public async Task<IActionResult> UpdateAccessibleStationIds(string id, [FromBody] List<long> accessibleStationIds)
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser == null || !currentUser.IsAdmin) return Unauthorized();
+
+            var user = await userManager.FindByIdAsync(id);
+            if (user == null) return BadRequest("User not found");
+
+            user.AccessibleStationIds = accessibleStationIds;
+            await userManager.UpdateAsync(user);
+
+            return Ok();
+        }
     }
+
     [Authorize]
     public class FakharController(SensorDataContext dataContext) : BaseController
     {
@@ -229,6 +247,7 @@ namespace TestWorkerService.Controller
             return Ok(new { count, data });
         }
     }
+
     [Authorize]
     public class DataPortalController(UserManager<ApplicationUser> userManager, SensorDataContext dataContext) : BaseController
     {
@@ -242,7 +261,8 @@ namespace TestWorkerService.Controller
                 (string.IsNullOrEmpty(parameters.ExternalId) || x.ExternalId == parameters.ExternalId) &&
                 (string.IsNullOrEmpty(parameters.SourceAddress) || x.SourceAddress.Contains(parameters.SourceAddress)) &&
                 user != null && x.City != null &&
-                (user.IsAdmin || user.AccessibleCities.Contains(x.City)) &&
+                (user.IsAdmin || !user.AccessibleCities.Any() || user.AccessibleCities.Contains(x.City)) &&
+                (user.IsAdmin || !user.AccessibleStationIds.Any() || user.AccessibleStationIds.Contains(x.Id)) &&
                 (!string.IsNullOrEmpty(parameters.SourceAddress) || x.SourceAddress != "alfakhar.co"));
 
             var data = await query
@@ -287,9 +307,10 @@ namespace TestWorkerService.Controller
                 (!parameters.DateMin.HasValue || x.TimeStamp >= parameters.DateMin) &&
                 (!parameters.StationId.HasValue || x.StationId == parameters.StationId) &&
                 user != null && x.Station != null && x.Station.City != null &&
-                (user.IsAdmin || user.AccessibleCities.Contains(x.Station!.City)) &&
+                (user.IsAdmin || !user.AccessibleCities.Any() || user.AccessibleCities.Contains(x.Station.City)) &&
+                (user.IsAdmin || !user.AccessibleStationIds.Any() || user.AccessibleStationIds.Contains(x.Station.Id)) &&
 
-        x.Station != null && x.Station.SourceAddress != "alfakhar.co");
+                x.Station != null && x.Station.SourceAddress != "alfakhar.co");
 
             var data = await query
                 .OrderbySensorData(parameters.SortingKey, parameters.SortingDirection)
@@ -321,7 +342,8 @@ namespace TestWorkerService.Controller
                 (!parameters.DateMin.HasValue || x.TimeStamp >= parameters.DateMin) &&
                 (x.StationId == parameters.StationId) &&
                 user != null && x.Station != null && x.Station.City != null &&
-                (user.IsAdmin || user.AccessibleCities.Contains(x.Station!.City)) &&
+                (user.IsAdmin || !user.AccessibleCities.Any() || user.AccessibleCities.Contains(x.Station.City)) &&
+                (user.IsAdmin || !user.AccessibleStationIds.Any() || user.AccessibleStationIds.Contains(x.Station.Id)) &&
                 (x.Station == null || x.Station.SourceAddress != "alfakhar.co"));
 
             IQueryable<IGrouping<object, SensorData>> dataQuery = parameters.Period switch
