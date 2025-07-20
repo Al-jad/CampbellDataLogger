@@ -153,7 +153,8 @@ namespace EmusatWorkerService
                                             StationId = station.Id,
                                             WL = values[3],
                                             BatteryVoltage
-                                                = double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
+                                                = values[3] == "M" && double.TryParse(values[^4], out double batteryVoltageM) ? batteryVoltageM
+                                                : double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
                                                 : double.TryParse(values[6], out double batteryVoltage2) ? batteryVoltage2
                                                 : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
                                                 : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
