@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using System.Collections;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -30,7 +29,7 @@ namespace EmusatWorkerService
                 {
                     _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                 }
-                foreach (var dcpid in appSettings.DCPIDs)
+                foreach (var dcpid in new string[] { "1886A3C8" })
                 {
                     try
                     {
@@ -148,19 +147,35 @@ namespace EmusatWorkerService
                                         var times = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]), "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture);
                                         var timestamp = DateTime.SpecifyKind(times, DateTimeKind.Utc);
                                         if (timestamp <= lastEntryDate) return false;
-                                        data.Add(new SensorData
-                                        {
-                                            StationId = station.Id,
-                                            WL = values[3],
-                                            BatteryVoltage
-                                                = values[3] == "M" && double.TryParse(values[^4], out double batteryVoltageM) ? batteryVoltageM
-                                                : double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
-                                                : double.TryParse(values[6], out double batteryVoltage2) ? batteryVoltage2
-                                                : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
-                                                : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
-                                                : double.Parse(values[7].Length >= 4 ? values[7][..4] : "0"),
-                                            TimeStamp = timestamp,
-                                        });
+
+                                        if (dcpid == "1886A3C8")//HardCoded Id for IRAQ/MOWR 77
+                                            data.Add(new SensorData
+                                            {
+                                                StationId = station.Id,
+                                                WL = values[7],
+                                                BatteryVoltage
+                                                    = values[3] == "M" && double.TryParse(values[^4], out double batteryVoltageM) ? batteryVoltageM
+                                                    : double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
+                                                    : double.TryParse(values[6], out double batteryVoltage2) ? batteryVoltage2
+                                                    : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
+                                                    : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
+                                                    : double.Parse(values[15].Length >= 4 ? values[15][..4] : "0"),
+                                                TimeStamp = timestamp,
+                                            });
+                                        else
+                                            data.Add(new SensorData
+                                            {
+                                                StationId = station.Id,
+                                                WL = values[3],
+                                                BatteryVoltage
+                                                    = values[3] == "M" && double.TryParse(values[^4], out double batteryVoltageM) ? batteryVoltageM
+                                                    : double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
+                                                    : double.TryParse(values[6], out double batteryVoltage2) ? batteryVoltage2
+                                                    : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
+                                                    : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
+                                                    : double.Parse(values[7].Length >= 4 ? values[7][..4] : "0"),
+                                                TimeStamp = timestamp,
+                                            });
                                         return true;
                                     }
                                     static string ProcessSegment(Span<byte> bytes)
@@ -195,6 +210,7 @@ namespace EmusatWorkerService
                     }
                     catch (Exception ex)
                     {
+#if false
                         var innerExceptionMessage = ex.InnerException != null
                             ? $"\n*Inner Exception:*\n```\n{EscapeTelegramMarkdown(string.Join("\n", ex.InnerException.Data.Cast<DictionaryEntry>().Select(de => $"{de.Key}: {de.Value}")))}\n```"
                             : string.Empty;
@@ -210,6 +226,7 @@ namespace EmusatWorkerService
 
                         Console.WriteLine(await response.Content.ReadAsStringAsync(stoppingToken));
                         throw;
+#endif
                     }
                 }
                 _logger.LogInformation("Next run in: {count} minutes", appSettings.Delay / 1000 / 60);
