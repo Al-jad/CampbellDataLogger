@@ -29,7 +29,7 @@ namespace EmusatWorkerService
                 {
                     _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                 }
-                foreach (var dcpid in new string[] { "1886A3C8" })
+                foreach (var dcpid in appSettings.DCPIDs)
                 {
                     try
                     {
