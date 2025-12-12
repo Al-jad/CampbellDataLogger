@@ -74,6 +74,62 @@ namespace TestWorkerService.Controller
             var users = await userManager.Users.ToListAsync();
             return Ok(users);
         }
+        [HttpPut("{id}/user")]
+        public async Task<IActionResult> EditUser(string id, UpdateUserDto updatedUser)
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser == null) return Unauthorized();
+
+            var user = await userManager.FindByIdAsync(id);
+            if (user == null) return BadRequest("User not found"); 
+            
+            if(currentUser.Id != long.Parse(id) && !currentUser.IsAdmin)return Unauthorized("only Account owner or Admin can Edit Account");
+
+            if(updatedUser.IsAdmin.HasValue && !currentUser.IsAdmin)return Unauthorized("only admins can premote or demote user to");
+
+            updatedUser.ProjectTo(user);
+
+        if (updatedUser.Password != null)
+        {
+            //Validation for the new password passed coplexty rules
+            foreach (var validator in userManager.PasswordValidators)
+            {
+                var validationResult = await validator.ValidateAsync(userManager, user, updatedUser.Password);
+                if (!validationResult.Succeeded)
+                {
+                    return BadRequest(validationResult.Errors);
+                }
+            }
+
+            //delete old password and add the new one
+            if (await userManager.HasPasswordAsync(user))
+            {
+                var removeResult = await userManager.RemovePasswordAsync(user);
+                if (!removeResult.Succeeded) return BadRequest(removeResult.Errors);
+            }
+
+            var addResult = await userManager.AddPasswordAsync(user, updatedUser.Password);
+            if (!addResult.Succeeded) return BadRequest(addResult.Errors);
+        }
+
+            await userManager.UpdateAsync(user);
+            return Ok();
+        }
+        [HttpDelete("{id}/user")]
+        public async Task<IActionResult> DeleteUser(string id)
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser == null) return Unauthorized();
+
+            var user = await userManager.FindByIdAsync(id);
+            if (user == null) return BadRequest("User not found"); 
+            
+            if(currentUser.Id != long.Parse(id) && !currentUser.IsAdmin)return Unauthorized("only Account owner or Admin can Delete Account");
+            
+            await userManager.DeleteAsync(user);
+            return Ok();
+        }
+
         
         [Authorize]
         [HttpPut("{id}/accessibleCities")]
