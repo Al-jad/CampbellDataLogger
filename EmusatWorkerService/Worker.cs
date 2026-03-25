@@ -6,7 +6,8 @@ using TestWorkerService;
 
 namespace EmusatWorkerService
 {
-    public class Worker(ILogger<Worker> logger, IConfiguration config, IServiceProvider serviceProvider) : BackgroundService
+    public class Worker(ILogger<Worker> logger, IConfiguration config, IServiceProvider serviceProvider)
+        : BackgroundService
     {
         private readonly ILogger<Worker> _logger = logger;
         private readonly EMUAppSettings? appSettings = config.Get<EMUAppSettings>();
@@ -14,6 +15,7 @@ namespace EmusatWorkerService
 
         private readonly byte[] hgSequence = [0x20, 0x23, 0xB6, 0xB0, 0x20];
         private readonly byte[] eotSequence = [0x20, 0xBB, 0x53, 0xC6];
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             if (appSettings is null) throw new ArgumentNullException(nameof(appSettings));
@@ -29,16 +31,19 @@ namespace EmusatWorkerService
                 {
                     _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                 }
+
                 foreach (var dcpid in appSettings.DCPIDs)
                 {
                     try
                     {
-                        var url = $"https://service.eumetsat.int/dcswebservice/dcpAdmin.do?action=ACTION_DOWNLOAD&id={dcpid}&user={appSettings.User}&pass={appSettings.Pass}";
+                        var url =
+                            $"https://service.eumetsat.int/dcswebservice/dcpAdmin.do?action=ACTION_DOWNLOAD&id={dcpid}&user={appSettings.User}&pass={appSettings.Pass}";
 
                         var response = await httpClient.GetAsync(url, stoppingToken);
                         if (response.IsSuccessStatusCode)
                         {
-                            _logger.LogInformation("Requesting the file for Station {dcpid} at {time}", dcpid, DateTimeOffset.Now);
+                            _logger.LogInformation("Requesting the file for Station {dcpid} at {time}", dcpid,
+                                DateTimeOffset.Now);
 
                             using Stream responseStream = await response.Content.ReadAsStreamAsync(stoppingToken);
                             using GZipStream decompressionStream = new(responseStream, CompressionMode.Decompress);
@@ -49,9 +54,9 @@ namespace EmusatWorkerService
 
                             bool newHeader = bytes[0x52] == 'B';
                             int byteLength = Convert.ToInt16(newHeader
-                                ? Encoding.ASCII.GetString(bytes[0x50..0x52])
-                                : Encoding.ASCII.GetString(bytes[0x50..0x54])
-                            , 16); //convert to hex
+                                    ? Encoding.ASCII.GetString(bytes[0x50..0x52])
+                                    : Encoding.ASCII.GetString(bytes[0x50..0x54])
+                                , 16); //convert to hex
 
                             Station? station;
                             station = context.Stations.FirstOrDefault(x => x.ExternalId == dcpid);
@@ -61,22 +66,27 @@ namespace EmusatWorkerService
                                 {
                                     Name = Encoding.ASCII.GetString(bytes[0x09..0x19]),
                                     SourceAddress = appSettings.SourceAddress,
-                                    ExternalId = dcpid
+                                    ExternalId = dcpid,
+                                    City = "بغداد"
                                 };
 
                                 context.Stations.Add(station);
                                 bool success = await context.SaveChangesAsync(stoppingToken) > 0;
-                                if (success) _logger.LogInformation("Added Station {dcpid} at {time}", dcpid, DateTimeOffset.Now);
+                                if (success)
+                                    _logger.LogInformation("Added Station {dcpid} at {time}", dcpid,
+                                        DateTimeOffset.Now);
                             }
+
                             var lastEntryDate = await context.SensorData
-                                .OrderByDescending(x => x.TimeStamp)
-                                .Where(x => x.StationId == station.Id)
-                                .Select(x => x.TimeStamp)
-                                .FirstOrDefaultAsync(stoppingToken)
-                                ?? DateTime.UtcNow.AddMonths(-2);
+                                                    .OrderByDescending(x => x.TimeStamp)
+                                                    .Where(x => x.StationId == station.Id)
+                                                    .Select(x => x.TimeStamp)
+                                                    .FirstOrDefaultAsync(stoppingToken)
+                                                ?? DateTime.UtcNow.AddMonths(-2);
 
                             int entryNum = 0;
                             int entryCount = CountSequenceOccurrences(bytes, eotSequence);
+
                             static int CountSequenceOccurrences(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence)
                             {
                                 int count = 0;
@@ -88,6 +98,7 @@ namespace EmusatWorkerService
                                         i += sequence.Length - 1;
                                     }
                                 }
+
                                 return count;
                             }
 
@@ -98,7 +109,9 @@ namespace EmusatWorkerService
                                 while (offset < bytes.Length)
                                 {
                                     int linewidth = FindSequence(bytes, eotSequence, offset) + 0x4 - offset;
-                                    static int FindSequence(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence, int offset = 0)
+
+                                    static int FindSequence(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence,
+                                        int offset = 0)
                                     {
                                         if (sequence.Length < span.Length)
                                         {
@@ -110,11 +123,14 @@ namespace EmusatWorkerService
                                                 }
                                             }
                                         }
+
                                         throw new ArgumentException("Invalid ByteArray");
                                     }
 
                                     int hgIndex = FindSequenceBitError(bytes, hgSequence, offset) - offset;
-                                    static int FindSequenceBitError(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence, int offset = 0)
+
+                                    static int FindSequenceBitError(ReadOnlySpan<byte> span,
+                                        ReadOnlySpan<byte> sequence, int offset = 0)
                                     {
                                         if (sequence.Length < span.Length)
                                         {
@@ -129,6 +145,7 @@ namespace EmusatWorkerService
                                                         matches++;
                                                     }
                                                 }
+
                                                 // Check if the number of matches meets the required threshold 3
                                                 if (matches >= 3)
                                                 {
@@ -136,48 +153,99 @@ namespace EmusatWorkerService
                                                 }
                                             }
                                         }
+
                                         throw new ArgumentException("Invalid ByteArray");
                                     }
+
                                     var success = AddFromBytes(bytes);
+
                                     bool AddFromBytes(byte[] bytes)
                                     {
                                         var row = bytes[offset..(offset + linewidth)].AsSpan();
                                         var values = ProcessSegment(row[(hgIndex - 0x5)..linewidth]).Split(' ');
                                         Console.WriteLine(string.Join(" ", values));
-                                        var times = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]), "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture);
+                                        var times = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]),
+                                            "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture);
                                         var timestamp = DateTime.SpecifyKind(times, DateTimeKind.Utc);
                                         if (timestamp <= lastEntryDate) return false;
 
-                                        if (dcpid == "1886A3C8")//HardCoded Id for IRAQ/MOWR 77
+                                        if (dcpid == "1886A3C8") //HardCoded Id for IRAQ/MOWR 77
                                             data.Add(new SensorData
                                             {
                                                 StationId = station.Id,
-                                                WL = values[7],
+                                                WL = values.Length > 7 ? values[7] : "0",
                                                 BatteryVoltage
-                                                    = values[3] == "M" && double.TryParse(values[^4], out double batteryVoltageM) ? batteryVoltageM
-                                                    : double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
-                                                    : double.TryParse(values[6], out double batteryVoltage2) ? batteryVoltage2
-                                                    : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
-                                                    : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
-                                                    : double.Parse(values[15].Length >= 4 ? values[15][..4] : "0"),
+                                                    = values.Length > 3 && values[3] == "M" &&
+                                                      double.TryParse(values[^4], out double batteryVoltageM)
+                                                        ? batteryVoltageM
+                                                        : double.TryParse(values[^3], out double batteryVoltage)
+                                                            ? batteryVoltage
+                                                            : values.Length > 6 && double.TryParse(values[6],
+                                                                out double batteryVoltage2)
+                                                                ? batteryVoltage2
+                                                                : double.TryParse(
+                                                                      values[^2].Length >= 4
+                                                                          ? values[^2][..4]
+                                                                          : string.Empty,
+                                                                      out double tempBatteryVoltage3) &&
+                                                                  values[^2].Length >= 4
+                                                                    ? tempBatteryVoltage3
+                                                                    : double.TryParse(
+                                                                          values[^4].Length >= 4
+                                                                              ? values[^4][..4]
+                                                                              : string.Empty,
+                                                                          out double tempBatteryVoltage4) &&
+                                                                      values[^4].Length >= 4
+                                                                        ? tempBatteryVoltage4
+                                                                        : values.Length > 15 &&
+                                                                          double.TryParse(
+                                                                              values[15].Length >= 4
+                                                                                  ? values[15][..4]
+                                                                                  : values[15], out double lastFallback)
+                                                                            ? lastFallback
+                                                                            : 0,
                                                 TimeStamp = timestamp,
                                             });
                                         else
                                             data.Add(new SensorData
                                             {
                                                 StationId = station.Id,
-                                                WL = values[3],
+                                                WL = values.Length > 3 ? values[3] : "0",
                                                 BatteryVoltage
-                                                    = values[3] == "M" && double.TryParse(values[^4], out double batteryVoltageM) ? batteryVoltageM
-                                                    : double.TryParse(values[^3], out double batteryVoltage) ? batteryVoltage
-                                                    : double.TryParse(values[6], out double batteryVoltage2) ? batteryVoltage2
-                                                    : double.TryParse(values[^2].Length >= 4 ? values[^2][..4] : string.Empty, out double tempBatteryVoltage3) && values[^2].Length >= 4 ? tempBatteryVoltage3
-                                                    : double.TryParse(values[^4].Length >= 4 ? values[^4][..4] : string.Empty, out double tempBatteryVoltage4) && values[^4].Length >= 4 ? tempBatteryVoltage4
-                                                    : double.Parse(values[7].Length >= 4 ? values[7][..4] : "0"),
+                                                    = values[3] == "M" && double.TryParse(values[^4],
+                                                        out double batteryVoltageM)
+                                                        ? batteryVoltageM
+                                                        : double.TryParse(values[^3], out double batteryVoltage)
+                                                            ? batteryVoltage
+                                                            : values.Length > 6 && double.TryParse(values[6],
+                                                                out double batteryVoltage2)
+                                                                ? batteryVoltage2
+                                                                : double.TryParse(
+                                                                      values[^2].Length >= 4
+                                                                          ? values[^2][..4]
+                                                                          : string.Empty,
+                                                                      out double tempBatteryVoltage3) &&
+                                                                  values[^2].Length >= 4
+                                                                    ? tempBatteryVoltage3
+                                                                    : double.TryParse(
+                                                                          values[^4].Length >= 4
+                                                                              ? values[^4][..4]
+                                                                              : string.Empty,
+                                                                          out double tempBatteryVoltage4) &&
+                                                                      values[^4].Length >= 4
+                                                                        ? tempBatteryVoltage4
+                                                                        : values.Length > 7 &&
+                                                                          double.TryParse(
+                                                                              values[7].Length >= 4
+                                                                                  ? values[7][..4]
+                                                                                  : values[7], out double lastFallback)
+                                                                            ? lastFallback
+                                                                            : 0,
                                                 TimeStamp = timestamp,
                                             });
                                         return true;
                                     }
+
                                     static string ProcessSegment(Span<byte> bytes)
                                     {
                                         for (int i = 0; i < bytes.Length; i++)
@@ -189,12 +257,17 @@ namespace EmusatWorkerService
                                             if (bytes[i] == 0x00) bytes[i] = 0x20;
                                             if (bytes[i] >= 0x3C && bytes[i] < 0x40) bytes[i] -= 0x04;
                                         }
+
                                         return Encoding.ASCII.GetString(bytes);
                                     }
+
                                     if (!success)
                                     {
-                                        Console.WriteLine($"Skipping Entry {entryNum += 1}:{entryCount} Date is earlier than Last saved Entry");
-                                    };
+                                        Console.WriteLine(
+                                            $"Skipping Entry {entryNum += 1}:{entryCount} Date is earlier than Last saved Entry");
+                                    }
+
+                                    ;
 
                                     Console.WriteLine($"Entries: {entryNum += 1}:{entryCount}");
                                     offset += linewidth;
@@ -204,8 +277,10 @@ namespace EmusatWorkerService
                             {
                                 Console.WriteLine(ex.Message);
                             }
+
                             await context.SensorData.AddRangeAsync(data, stoppingToken);
-                            _logger.LogInformation("Added {count} Sensor Data to station {dcpid} at {time}", await context.SaveChangesAsync(stoppingToken), dcpid, DateTimeOffset.Now);
+                            _logger.LogInformation("Added {count} Sensor Data to station {dcpid} at {time}",
+                                await context.SaveChangesAsync(stoppingToken), dcpid, DateTimeOffset.Now);
                         }
                     }
                     catch (Exception ex)
@@ -214,7 +289,8 @@ namespace EmusatWorkerService
                         var innerExceptionMessage = ex.InnerException != null
                             ? $"\n*Inner Exception:*\n```\n{EscapeTelegramMarkdown(string.Join("\n", ex.InnerException.Data.Cast<DictionaryEntry>().Select(de => $"{de.Key}: {de.Value}")))}\n```"
                             : string.Empty;
-                        var response = await httpClient.PostAsync($"https://api.telegram.org/bot{appSettings.Telegram.AccessToken}/sendMessage",
+                        var response =
+ await httpClient.PostAsync($"https://api.telegram.org/bot{appSettings.Telegram.AccessToken}/sendMessage",
                             new FormUrlEncodedContent(
                             [
                                 new("chat_id", appSettings.Telegram.ChatId),
@@ -229,10 +305,12 @@ namespace EmusatWorkerService
 #endif
                     }
                 }
+
                 _logger.LogInformation("Next run in: {count} minutes", appSettings.Delay / 1000 / 60);
                 await Task.Delay(appSettings.Delay, stoppingToken);
             }
         }
+
         private static string EscapeTelegramMarkdown(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -257,6 +335,5 @@ namespace EmusatWorkerService
                 .Replace(".", "\\.")
                 .Replace("!", "\\!");
         }
-
     }
 }
