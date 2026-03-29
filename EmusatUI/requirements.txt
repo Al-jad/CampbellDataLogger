@@ -1,0 +1,4 @@
+customtkinter
+psycopg[binary]
+requests
+pyinstaller

@@ -52,11 +52,18 @@ namespace EmusatWorkerService
                             await decompressionStream.CopyToAsync(memoryStream, stoppingToken);
                             byte[] bytes = memoryStream.ToArray();
 
+                            if (bytes.Length < 0x55)
+                            {
+                                _logger.LogWarning("Station {dcpid}: response too short ({len} bytes), skipping",
+                                    dcpid, bytes.Length);
+                                continue;
+                            }
+
                             bool newHeader = bytes[0x52] == 'B';
                             int byteLength = Convert.ToInt16(newHeader
                                     ? Encoding.ASCII.GetString(bytes[0x50..0x52])
                                     : Encoding.ASCII.GetString(bytes[0x50..0x54])
-                                , 16); //convert to hex
+                                , 16);
 
                             Station? station;
                             station = context.Stations.FirstOrDefault(x => x.ExternalId == dcpid);
@@ -85,6 +92,8 @@ namespace EmusatWorkerService
                                                 ?? DateTime.UtcNow.AddMonths(-2);
 
                             int entryNum = 0;
+                            int skipped = 0;
+                            int failed = 0;
                             int entryCount = CountSequenceOccurrences(bytes, eotSequence);
 
                             static int CountSequenceOccurrences(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence)
@@ -104,179 +113,98 @@ namespace EmusatWorkerService
 
                             int offset = 0;
                             List<SensorData> data = [];
-                            try
+
+                            while (offset < bytes.Length)
                             {
-                                while (offset < bytes.Length)
+                                int linewidth;
+                                try
                                 {
-                                    int linewidth = FindSequence(bytes, eotSequence, offset) + 0x4 - offset;
+                                    linewidth = FindSequence(bytes, eotSequence, offset) + 0x4 - offset;
+                                }
+                                catch
+                                {
+                                    break;
+                                }
 
-                                    static int FindSequence(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence,
-                                        int offset = 0)
-                                    {
-                                        if (sequence.Length < span.Length)
-                                        {
-                                            for (int i = offset; i <= span.Length - sequence.Length; i++)
-                                            {
-                                                if (span.Slice(i, sequence.Length).SequenceEqual(sequence))
-                                                {
-                                                    return i;
-                                                }
-                                            }
-                                        }
-
-                                        throw new ArgumentException("Invalid ByteArray");
-                                    }
-
+                                try
+                                {
                                     int hgIndex = FindSequenceBitError(bytes, hgSequence, offset) - offset;
 
-                                    static int FindSequenceBitError(ReadOnlySpan<byte> span,
-                                        ReadOnlySpan<byte> sequence, int offset = 0)
+                                    var row = bytes[offset..(offset + linewidth)].AsSpan();
+
+                                    if (row.Length < 0x48)
                                     {
-                                        if (sequence.Length < span.Length)
-                                        {
-                                            for (int i = offset; i <= span.Length - sequence.Length; i++)
-                                            {
-                                                int matches = 0;
-                                                // Count matching bytes at the current position
-                                                for (int j = 0; j < sequence.Length; j++)
-                                                {
-                                                    if (span[i + j] == sequence[j])
-                                                    {
-                                                        matches++;
-                                                    }
-                                                }
-
-                                                // Check if the number of matches meets the required threshold 3
-                                                if (matches >= 3)
-                                                {
-                                                    return i; // Return the starting index of the match
-                                                }
-                                            }
-                                        }
-
-                                        throw new ArgumentException("Invalid ByteArray");
+                                        _logger.LogWarning(
+                                            "Station {dcpid} entry {num}/{total}: too short ({len} bytes), skipping",
+                                            dcpid, entryNum + 1, entryCount, row.Length);
+                                        failed++;
+                                        offset += linewidth;
+                                        entryNum++;
+                                        continue;
                                     }
 
-                                    var success = AddFromBytes(bytes);
+                                    int dataStart = Math.Max(0, hgIndex - 0x5);
+                                    var values = ProcessSegment(row[dataStart..linewidth])
+                                        .Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-                                    bool AddFromBytes(byte[] bytes)
+                                    Console.WriteLine(string.Join(" ", values));
+
+                                    var timeStr = ProcessSegment(row[0x37..0x48]);
+                                    if (!DateTime.TryParseExact(timeStr, "dd/MM/yy HH:mm:ss",
+                                            CultureInfo.InvariantCulture, DateTimeStyles.None, out var times))
                                     {
-                                        var row = bytes[offset..(offset + linewidth)].AsSpan();
-                                        var values = ProcessSegment(row[(hgIndex - 0x5)..linewidth]).Split(' ');
-                                        Console.WriteLine(string.Join(" ", values));
-                                        var times = DateTime.ParseExact(ProcessSegment(row[0x37..0x48]),
-                                            "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture);
-                                        var timestamp = DateTime.SpecifyKind(times, DateTimeKind.Utc);
-                                        if (timestamp <= lastEntryDate) return false;
-
-                                        if (dcpid == "1886A3C8") //HardCoded Id for IRAQ/MOWR 77
-                                            data.Add(new SensorData
-                                            {
-                                                StationId = station.Id,
-                                                WL = values.Length > 7 ? values[7] : "0",
-                                                BatteryVoltage
-                                                    = values.Length > 3 && values[3] == "M" &&
-                                                      double.TryParse(values[^4], out double batteryVoltageM)
-                                                        ? batteryVoltageM
-                                                        : double.TryParse(values[^3], out double batteryVoltage)
-                                                            ? batteryVoltage
-                                                            : values.Length > 6 && double.TryParse(values[6],
-                                                                out double batteryVoltage2)
-                                                                ? batteryVoltage2
-                                                                : double.TryParse(
-                                                                      values[^2].Length >= 4
-                                                                          ? values[^2][..4]
-                                                                          : string.Empty,
-                                                                      out double tempBatteryVoltage3) &&
-                                                                  values[^2].Length >= 4
-                                                                    ? tempBatteryVoltage3
-                                                                    : double.TryParse(
-                                                                          values[^4].Length >= 4
-                                                                              ? values[^4][..4]
-                                                                              : string.Empty,
-                                                                          out double tempBatteryVoltage4) &&
-                                                                      values[^4].Length >= 4
-                                                                        ? tempBatteryVoltage4
-                                                                        : values.Length > 15 &&
-                                                                          double.TryParse(
-                                                                              values[15].Length >= 4
-                                                                                  ? values[15][..4]
-                                                                                  : values[15], out double lastFallback)
-                                                                            ? lastFallback
-                                                                            : 0,
-                                                TimeStamp = timestamp,
-                                            });
-                                        else
-                                            data.Add(new SensorData
-                                            {
-                                                StationId = station.Id,
-                                                WL = values.Length > 3 ? values[3] : "0",
-                                                BatteryVoltage
-                                                    = values[3] == "M" && double.TryParse(values[^4],
-                                                        out double batteryVoltageM)
-                                                        ? batteryVoltageM
-                                                        : double.TryParse(values[^3], out double batteryVoltage)
-                                                            ? batteryVoltage
-                                                            : values.Length > 6 && double.TryParse(values[6],
-                                                                out double batteryVoltage2)
-                                                                ? batteryVoltage2
-                                                                : double.TryParse(
-                                                                      values[^2].Length >= 4
-                                                                          ? values[^2][..4]
-                                                                          : string.Empty,
-                                                                      out double tempBatteryVoltage3) &&
-                                                                  values[^2].Length >= 4
-                                                                    ? tempBatteryVoltage3
-                                                                    : double.TryParse(
-                                                                          values[^4].Length >= 4
-                                                                              ? values[^4][..4]
-                                                                              : string.Empty,
-                                                                          out double tempBatteryVoltage4) &&
-                                                                      values[^4].Length >= 4
-                                                                        ? tempBatteryVoltage4
-                                                                        : values.Length > 7 &&
-                                                                          double.TryParse(
-                                                                              values[7].Length >= 4
-                                                                                  ? values[7][..4]
-                                                                                  : values[7], out double lastFallback)
-                                                                            ? lastFallback
-                                                                            : 0,
-                                                TimeStamp = timestamp,
-                                            });
-                                        return true;
+                                        _logger.LogWarning(
+                                            "Station {dcpid} entry {num}/{total}: bad timestamp '{ts}', skipping",
+                                            dcpid, entryNum + 1, entryCount, timeStr.Trim());
+                                        failed++;
+                                        offset += linewidth;
+                                        entryNum++;
+                                        continue;
                                     }
 
-                                    static string ProcessSegment(Span<byte> bytes)
+                                    var timestamp = DateTime.SpecifyKind(times, DateTimeKind.Utc);
+                                    if (timestamp <= lastEntryDate)
                                     {
-                                        for (int i = 0; i < bytes.Length; i++)
-                                        {
-                                            if (bytes[i] > 0x80) bytes[i] -= 0x80;
-                                            if (bytes[i] >= 0x60) bytes[i] -= 0x40;
-                                            if (bytes[i] == 0x2A) bytes[i] = 0x2E;
-                                            if (bytes[i] == 0x24) bytes[i] = 0x20;
-                                            if (bytes[i] == 0x00) bytes[i] = 0x20;
-                                            if (bytes[i] >= 0x3C && bytes[i] < 0x40) bytes[i] -= 0x04;
-                                        }
-
-                                        return Encoding.ASCII.GetString(bytes);
+                                        skipped++;
+                                        offset += linewidth;
+                                        entryNum++;
+                                        continue;
                                     }
 
-                                    if (!success)
+                                    string wl = dcpid == "1886A3C8"
+                                        ? (values.Length > 7 ? values[7] : "0")
+                                        : (values.Length > 3 ? values[3] : "0");
+
+                                    double battery = ParseBatteryVoltage(values, dcpid == "1886A3C8");
+
+                                    data.Add(new SensorData
                                     {
-                                        Console.WriteLine(
-                                            $"Skipping Entry {entryNum += 1}:{entryCount} Date is earlier than Last saved Entry");
-                                    }
-
-                                    ;
-
-                                    Console.WriteLine($"Entries: {entryNum += 1}:{entryCount}");
-                                    offset += linewidth;
+                                        StationId = station.Id,
+                                        WL = wl,
+                                        BatteryVoltage = battery,
+                                        TimeStamp = timestamp,
+                                    });
                                 }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex,
+                                        "Station {dcpid} entry {num}/{total}: parse error, skipping",
+                                        dcpid, entryNum + 1, entryCount);
+                                    failed++;
+                                }
+
+                                offset += linewidth;
+                                entryNum++;
                             }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine(ex.Message);
-                            }
+
+                            if (failed > 0)
+                                _logger.LogWarning(
+                                    "Station {dcpid}: {failed}/{total} entries failed to parse",
+                                    dcpid, failed, entryCount);
+                            if (skipped > 0)
+                                _logger.LogInformation(
+                                    "Station {dcpid}: {skipped}/{total} entries skipped (already saved)",
+                                    dcpid, skipped, entryCount);
 
                             await context.SensorData.AddRangeAsync(data, stoppingToken);
                             _logger.LogInformation("Added {count} Sensor Data to station {dcpid} at {time}",
@@ -285,30 +213,104 @@ namespace EmusatWorkerService
                     }
                     catch (Exception ex)
                     {
-#if false
-                        var innerExceptionMessage = ex.InnerException != null
-                            ? $"\n*Inner Exception:*\n```\n{EscapeTelegramMarkdown(string.Join("\n", ex.InnerException.Data.Cast<DictionaryEntry>().Select(de => $"{de.Key}: {de.Value}")))}\n```"
-                            : string.Empty;
-                        var response =
- await httpClient.PostAsync($"https://api.telegram.org/bot{appSettings.Telegram.AccessToken}/sendMessage",
-                            new FormUrlEncodedContent(
-                            [
-                                new("chat_id", appSettings.Telegram.ChatId),
-                                new("message_thread_id", appSettings.Telegram.TopicId),
-                                new("text", $"*Emusat Station:* `{dcpid}`\n*Error:* {EscapeTelegramMarkdown(ex.Message)}{innerExceptionMessage}"),
-                                new("parse_mode", "MarkdownV2")
-                            ]), stoppingToken);
-                        Console.WriteLine(response);
-
-                        Console.WriteLine(await response.Content.ReadAsStringAsync(stoppingToken));
-                        throw;
-#endif
+                        _logger.LogError(ex, "Failed to process station {dcpid}", dcpid);
                     }
                 }
 
                 _logger.LogInformation("Next run in: {count} minutes", appSettings.Delay / 1000 / 60);
                 await Task.Delay(appSettings.Delay, stoppingToken);
             }
+        }
+
+        private static double ParseBatteryVoltage(string[] values, bool isMowr77)
+        {
+            if (values.Length < 4) return 0;
+
+            if (values[3] == "M" && values.Length >= 5 &&
+                double.TryParse(values[^4], out double bvM))
+                return bvM;
+
+            if (values.Length >= 4 && double.TryParse(values[^3], out double bv1))
+                return bv1;
+
+            if (values.Length > 6 && double.TryParse(values[6], out double bv2))
+                return bv2;
+
+            if (values.Length >= 3 && values[^2].Length >= 4 &&
+                double.TryParse(values[^2][..4], out double bv3))
+                return bv3;
+
+            if (values.Length >= 5 && values[^4].Length >= 4 &&
+                double.TryParse(values[^4][..4], out double bv4))
+                return bv4;
+
+            int fallbackIdx = isMowr77 ? 15 : 7;
+            if (values.Length > fallbackIdx)
+            {
+                var raw = values[fallbackIdx];
+                var candidate = raw.Length >= 4 ? raw[..4] : raw;
+                if (double.TryParse(candidate, out double bvLast))
+                    return bvLast;
+            }
+
+            return 0;
+        }
+
+        private static int FindSequence(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence, int offset = 0)
+        {
+            if (sequence.Length < span.Length)
+            {
+                for (int i = offset; i <= span.Length - sequence.Length; i++)
+                {
+                    if (span.Slice(i, sequence.Length).SequenceEqual(sequence))
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            throw new ArgumentException("Sequence not found in byte array");
+        }
+
+        private static int FindSequenceBitError(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence,
+            int offset = 0)
+        {
+            if (sequence.Length < span.Length)
+            {
+                for (int i = offset; i <= span.Length - sequence.Length; i++)
+                {
+                    int matches = 0;
+                    for (int j = 0; j < sequence.Length; j++)
+                    {
+                        if (span[i + j] == sequence[j])
+                        {
+                            matches++;
+                        }
+                    }
+
+                    if (matches >= 3)
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            throw new ArgumentException("Sequence not found in byte array (fuzzy)");
+        }
+
+        private static string ProcessSegment(Span<byte> bytes)
+        {
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                if (bytes[i] > 0x80) bytes[i] -= 0x80;
+                if (bytes[i] >= 0x60) bytes[i] -= 0x40;
+                if (bytes[i] == 0x2A) bytes[i] = 0x2E;
+                if (bytes[i] == 0x24) bytes[i] = 0x20;
+                if (bytes[i] == 0x00) bytes[i] = 0x20;
+                if (bytes[i] >= 0x3C && bytes[i] < 0x40) bytes[i] -= 0x04;
+            }
+
+            return Encoding.ASCII.GetString(bytes);
         }
 
         private static string EscapeTelegramMarkdown(string input)
