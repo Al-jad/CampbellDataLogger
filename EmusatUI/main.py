@@ -289,10 +289,12 @@ def sync_all_stations(log_fn, stop_event: threading.Event | None = None) -> dict
     session = requests.Session()
     session.headers["Accept-Encoding"] = "gzip, deflate"
     totals = {"synced": 0, "new_rows": 0, "failed": 0, "skipped_stations": 0}
+    all_dcpids = get_all_dcpids()
+    log_fn("INFO", f"Syncing {len(all_dcpids)} DCPID(s)...")
 
     with psycopg.connect(**DB_CONFIG) as conn:
         with conn.cursor() as cur:
-            for dcpid in DCPIDS:
+            for dcpid in all_dcpids:
                 if stop_event and stop_event.is_set():
                     log_fn("WARN", "Sync cancelled")
                     break
@@ -443,6 +445,205 @@ def run_diagnose(log_fn):
         log_fn("OK", "All stations have data in DB")
 
 
+# ── DB station management ─────────────────────────────────────────────────────
+
+
+def add_station_to_db(external_id: str, name: str, city: str = "",
+                      lat: float | None = None, lng: float | None = None,
+                      description: str = "", notes: str = "") -> int:
+    with psycopg.connect(**DB_CONFIG) as conn:
+        with conn.cursor() as cur:
+            cur.execute('SELECT "Id" FROM "Stations" WHERE "ExternalId" = %s', (external_id,))
+            if cur.fetchone():
+                raise ValueError(f"Station with External ID '{external_id}' already exists")
+            cur.execute(
+                'INSERT INTO "Stations" '
+                '("Name", "SourceAddress", "ExternalId", "City", "Lat", "Lng", '
+                '"Description", "Notes", "CreatedAt") '
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                'RETURNING "Id"',
+                (name, SOURCE_ADDRESS, external_id, city or None,
+                 lat, lng, description or None, notes or None,
+                 datetime.now(timezone.utc)),
+            )
+            station_id = cur.fetchone()[0]
+            conn.commit()
+    return station_id
+
+
+def update_station_in_db(station_id: int, *, name: str, external_id: str = "",
+                         city: str = "", lat: float | None = None,
+                         lng: float | None = None, description: str = "",
+                         notes: str = ""):
+    with psycopg.connect(**DB_CONFIG) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE "Stations" SET "Name" = %s, "ExternalId" = %s, "City" = %s, '
+                '"Lat" = %s, "Lng" = %s, "Description" = %s, "Notes" = %s '
+                'WHERE "Id" = %s',
+                (name, external_id or None, city or None, lat, lng,
+                 description or None, notes or None, station_id),
+            )
+            conn.commit()
+
+
+def get_station_info(station_id: int) -> dict | None:
+    with psycopg.connect(**DB_CONFIG) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT "Id", "Name", "ExternalId", "City", "Lat", "Lng", '
+                '"Description", "Notes" FROM "Stations" WHERE "Id" = %s',
+                (station_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0], "name": row[1] or "", "external_id": row[2] or "",
+                "city": row[3] or "", "lat": row[4], "lng": row[5],
+                "description": row[6] or "", "notes": row[7] or "",
+            }
+
+
+def get_all_dcpids() -> list[str]:
+    """Merge hardcoded DCPIDS with any extra ones added via the UI."""
+    db_ids: set[str] = set()
+    with psycopg.connect(**DB_CONFIG) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT "ExternalId" FROM "Stations" '
+                'WHERE "SourceAddress" = %s AND "ExternalId" IS NOT NULL',
+                (SOURCE_ADDRESS,),
+            )
+            db_ids = {r[0] for r in cur.fetchall()}
+    combined = list(DCPIDS)
+    for eid in sorted(db_ids):
+        if eid not in combined:
+            combined.append(eid)
+    return combined
+
+
+# ── Station dialog ────────────────────────────────────────────────────────────
+
+
+class StationDialog(ctk.CTkToplevel):
+    def __init__(self, parent, mode="add", station_data=None, on_done=None):
+        super().__init__(parent)
+        self.transient(parent)
+        self.grab_set()
+        self._mode = mode
+        self._data = station_data or {}
+        self._on_done = on_done
+
+        title = "Add New Station" if mode == "add" else f"Edit - {self._data.get('name', '')}"
+        self.title(title)
+        self.geometry("460x560")
+        self.resizable(False, False)
+        self._entries: dict[str, ctk.CTkEntry | ctk.CTkTextbox] = {}
+        self._build()
+        self.after(100, self.focus_force)
+
+    def _build(self):
+        main = ctk.CTkScrollableFrame(self)
+        main.pack(fill="both", expand=True, padx=16, pady=12)
+
+        d = self._data
+        fields = [
+            ("External ID (DCPID) *", "external_id", d.get("external_id", "")),
+            ("Station Name *", "name", d.get("name", "")),
+            ("City", "city", d.get("city", "")),
+            ("Latitude", "lat", str(d["lat"]) if d.get("lat") is not None else ""),
+            ("Longitude", "lng", str(d["lng"]) if d.get("lng") is not None else ""),
+            ("Description", "description", d.get("description", "")),
+        ]
+
+        for label, key, val in fields:
+            ctk.CTkLabel(main, text=label, anchor="w",
+                         font=ctk.CTkFont(size=12, weight="bold")).pack(
+                fill="x", padx=4, pady=(8, 1))
+            e = ctk.CTkEntry(main, placeholder_text=label.replace(" *", ""))
+            e.insert(0, val)
+            e.pack(fill="x", padx=4, pady=(0, 2))
+            self._entries[key] = e
+
+        ctk.CTkLabel(main, text="Notes", anchor="w",
+                     font=ctk.CTkFont(size=12, weight="bold")).pack(
+            fill="x", padx=4, pady=(8, 1))
+        notes_box = ctk.CTkTextbox(main, height=70)
+        notes_box.insert("0.0", d.get("notes", ""))
+        notes_box.pack(fill="x", padx=4, pady=(0, 2))
+        self._entries["notes"] = notes_box
+
+        btns = ctk.CTkFrame(main, fg_color="transparent")
+        btns.pack(fill="x", pady=(16, 4))
+
+        ctk.CTkButton(btns, text="Cancel", width=80,
+                       fg_color="#6b7280", hover_color="#4b5563",
+                       command=self.destroy).pack(side="left", padx=4)
+
+        ctk.CTkButton(btns, text="Save", width=100,
+                       command=lambda: self._submit(False)).pack(side="right", padx=4)
+
+        if self._mode == "add":
+            ctk.CTkButton(btns, text="Save & Sync", width=130,
+                           fg_color="#16a34a", hover_color="#15803d",
+                           command=lambda: self._submit(True)).pack(side="right", padx=4)
+
+    def _val(self, key: str) -> str:
+        w = self._entries[key]
+        if isinstance(w, ctk.CTkTextbox):
+            return w.get("0.0", "end").strip()
+        return w.get().strip()
+
+    def _submit(self, sync: bool):
+        ext = self._val("external_id").upper()
+        name = self._val("name")
+
+        if not name:
+            messagebox.showwarning("Required", "Station name is required.", parent=self)
+            return
+        if self._mode == "add" and not ext:
+            messagebox.showwarning("Required", "External ID is required for new stations.", parent=self)
+            return
+
+        lat = lng = None
+        for key, lbl in [("lat", "Latitude"), ("lng", "Longitude")]:
+            raw = self._val(key)
+            if raw:
+                try:
+                    v = float(raw)
+                except ValueError:
+                    messagebox.showwarning("Invalid", f"{lbl} must be a number.", parent=self)
+                    return
+                if key == "lat":
+                    lat = v
+                else:
+                    lng = v
+
+        city = self._val("city")
+        desc = self._val("description")
+        notes = self._val("notes")
+
+        try:
+            if self._mode == "add":
+                sid = add_station_to_db(ext, name, city, lat, lng, desc, notes)
+            else:
+                sid = self._data["id"]
+                update_station_in_db(sid, name=name, external_id=ext,
+                                     city=city, lat=lat, lng=lng,
+                                     description=desc, notes=notes)
+        except Exception as e:
+            messagebox.showerror("Database Error", str(e), parent=self)
+            return
+
+        self.destroy()
+        if self._on_done:
+            self._on_done({
+                "id": sid, "external_id": ext, "name": name,
+                "mode": self._mode, "sync": sync,
+            })
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
 class App(ctk.CTk):
@@ -458,6 +659,7 @@ class App(ctk.CTk):
 
         self._station_map: dict[str, int] = {}
         self._station_extid_map: dict[str, str] = {}
+        self._table_rows: dict[str, dict] = {}
         self._sort_col: str | None = None
         self._sort_asc: bool = True
         self._sync_stop = threading.Event()
@@ -537,6 +739,23 @@ class App(ctk.CTk):
         )
         self.btn_diagnose.pack(side="left", padx=3)
 
+        sep3 = ctk.CTkFrame(ctrl, width=2, height=28, fg_color="#45475a")
+        sep3.pack(side="left", padx=6)
+
+        self.btn_add = ctk.CTkButton(
+            ctrl, text="+ Add", width=70,
+            fg_color="#f59e0b", hover_color="#d97706",
+            command=self._on_add_station,
+        )
+        self.btn_add.pack(side="left", padx=3)
+
+        self.btn_edit = ctk.CTkButton(
+            ctrl, text="Edit", width=60,
+            fg_color="#8b5cf6", hover_color="#7c3aed",
+            command=self._on_edit_selected,
+        )
+        self.btn_edit.pack(side="left", padx=3)
+
         # ── status bar ────────────────────────────────────────────────────
         status_bar = ctk.CTkFrame(self, height=28, corner_radius=0, fg_color="#11111b")
         status_bar.pack(fill="x", side="bottom")
@@ -587,6 +806,8 @@ class App(ctk.CTk):
         self.tree.tag_configure("odd", background="#181825")
         self.tree.tag_configure("even", background="#1e1e2e")
         self.tree.tag_configure("nodata", background="#2a1a1a", foreground="#f38ba8")
+
+        self.tree.bind("<Double-1>", self._on_row_double_click)
 
         # log
         log_outer = tk.Frame(pane, bg="#11111b")
@@ -826,14 +1047,80 @@ class App(ctk.CTk):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    # ── station management ────────────────────────────────────────────────
+
+    def _on_add_station(self):
+        StationDialog(self, mode="add", on_done=self._station_dialog_done)
+
+    def _on_edit_selected(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showinfo("Select", "Select a station row first (or double-click one).")
+            return
+        self._open_edit_dialog(sel[0])
+
+    def _on_row_double_click(self, event):
+        iid = self.tree.identify_row(event.y)
+        if iid:
+            self._open_edit_dialog(iid)
+
+    def _open_edit_dialog(self, iid: str):
+        row_data = self._table_rows.get(iid)
+        if not row_data:
+            return
+        station_id = row_data["id"]
+        self.log("INFO", "Loading station details...")
+
+        def worker():
+            try:
+                info = get_station_info(station_id)
+                if info:
+                    self.after(0, lambda: StationDialog(
+                        self, mode="edit", station_data=info,
+                        on_done=self._station_dialog_done))
+                else:
+                    self.after(0, lambda: messagebox.showerror(
+                        "Error", "Station not found in DB"))
+            except Exception as ex:
+                self.after(0, lambda: messagebox.showerror("Error", str(ex)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _station_dialog_done(self, result: dict):
+        action = "added" if result["mode"] == "add" else "updated"
+        self.log("OK", f"Station '{result['name']}' {action}")
+        self._load_stations_async()
+
+        if result.get("sync") and result.get("external_id"):
+            ext = result["external_id"]
+            if ext not in DCPIDS:
+                DCPIDS.append(ext)
+            self._set_busy(True)
+            self.log("INFO", f"=== Syncing new station {ext} ===")
+
+            def worker():
+                try:
+                    stats = sync_single_station(ext, self._log_threadsafe)
+                    self._log_threadsafe("OK",
+                        f"=== Sync done: {stats['new_rows']} new rows ===")
+                    self.after(0, self._on_refresh_all)
+                except Exception as ex:
+                    self._log_threadsafe("ERROR", f"[{ext}] {ex}")
+                finally:
+                    self.after(0, lambda: self._set_busy(False))
+
+            threading.Thread(target=worker, daemon=True).start()
+
     # ── table ─────────────────────────────────────────────────────────────
 
     def _populate_table(self, rows: list[dict]):
+        self._table_rows = {str(row["id"]): row for row in rows}
         self.tree.delete(*self.tree.get_children())
         for i, row in enumerate(rows):
+            iid = str(row["id"])
             has_data = row["timestamp"] != "---"
             tag = "nodata" if not has_data else ("even" if i % 2 == 0 else "odd")
-            self.tree.insert("", "end", values=(
+            self.tree.insert("", "end", iid=iid, values=(
                 row["name"], row["external_id"], row["city"],
                 row["wl"], row["battery"], row["timestamp"],
             ), tags=(tag,))
