@@ -1,4 +1,5 @@
 import gzip
+import re
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -133,6 +134,19 @@ def parse_battery_voltage(values: list[str], is_mowr77: bool) -> float:
     return 0.0
 
 
+_SALT_RE = re.compile(r"SAL[^#]*#\s*\d{2}\s*(\d+\.\d{2})", re.IGNORECASE)
+
+
+def parse_salt(processed_segment: str) -> float | None:
+    m = _SALT_RE.search(processed_segment)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            return None
+    return None
+
+
 def parse_entries(data: bytes, dcpid: str, last_ts: datetime, log_fn) -> list[dict]:
     results = []
     entry_count = count_sequence(data, EOT_SEQ)
@@ -165,7 +179,8 @@ def parse_entries(data: bytes, dcpid: str, last_ts: datetime, log_fn) -> list[di
 
             data_start = max(0, hg_rel - 5)
             segment = bytearray(row_bytes[data_start:linewidth])
-            values = process_segment(segment).split()
+            processed_str = process_segment(segment)
+            values = processed_str.split()
 
             try:
                 ts = datetime.strptime(time_str, "%d/%m/%y %H:%M:%S")
@@ -186,8 +201,9 @@ def parse_entries(data: bytes, dcpid: str, last_ts: datetime, log_fn) -> list[di
             is_mowr77 = dcpid == MOWR77_ID
             wl = values[7] if (is_mowr77 and len(values) > 7) else (values[3] if len(values) > 3 else "0")
             battery = parse_battery_voltage(values, is_mowr77)
+            salt = parse_salt(processed_str)
 
-            results.append({"wl": wl, "battery": battery, "timestamp": ts})
+            results.append({"wl": wl, "battery": battery, "salt": salt, "timestamp": ts})
 
         except Exception as ex:
             log_fn("WARN", f"  [{dcpid}] entry {entry_num+1}/{entry_count}: {ex}")
@@ -270,11 +286,11 @@ def _sync_dcpid(cur, conn, dcpid: str, session: requests.Session, log_fn) -> dic
 
     if entries:
         with cur.copy(
-            'COPY "SensorData" ("StationId", "WL", "BatteryVoltage", "TimeStamp", "Record") '
+            'COPY "SensorData" ("StationId", "WL", "BatteryVoltage", "Salt", "TimeStamp", "Record") '
             "FROM STDIN"
         ) as copy:
             for e in entries:
-                copy.write_row((station_id, e["wl"], e["battery"], e["timestamp"], 0))
+                copy.write_row((station_id, e["wl"], e["battery"], e["salt"], e["timestamp"], 0))
         conn.commit()
         log_fn("OK", f"[{dcpid}] Saved {len(entries)} new row(s)")
         stats["new_rows"] += len(entries)
