@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
+using System.Text.RegularExpressions;
 using TestWorkerService;
 
 namespace EmusatWorkerService
@@ -144,7 +145,8 @@ namespace EmusatWorkerService
                                     }
 
                                     int dataStart = Math.Max(0, hgIndex - 0x5);
-                                    var values = ProcessSegment(row[dataStart..linewidth])
+                                    var processedStr = ProcessSegment(row[dataStart..linewidth]);
+                                    var values = processedStr
                                         .Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
                                     Console.WriteLine(string.Join(" ", values));
@@ -176,12 +178,14 @@ namespace EmusatWorkerService
                                         : (values.Length > 3 ? values[3] : "0");
 
                                     double battery = ParseBatteryVoltage(values, dcpid == "1886A3C8");
+                                    double? salt = ParseSalt(processedStr);
 
                                     data.Add(new SensorData
                                     {
                                         StationId = station.Id,
                                         WL = wl,
                                         BatteryVoltage = battery,
+                                        Salt = salt,
                                         TimeStamp = timestamp,
                                     });
                                 }
@@ -254,6 +258,15 @@ namespace EmusatWorkerService
             }
 
             return 0;
+        }
+
+        private static double? ParseSalt(string processedSegment)
+        {
+            var match = Regex.Match(processedSegment, @"SAL[^#]*#\s*\d{2}\s*(\d+\.\d{2})", RegexOptions.IgnoreCase);
+            return match.Success &&
+                   double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double salt)
+                ? salt
+                : null;
         }
 
         private static int FindSequence(ReadOnlySpan<byte> span, ReadOnlySpan<byte> sequence, int offset = 0)
