@@ -340,10 +340,10 @@ def sync_single_station(dcpid: str, log_fn) -> dict:
 
 QUERY_ALL = """
 SELECT s."Id", s."Name", s."ExternalId", s."City",
-       sd."WL", sd."BatteryVoltage", sd."TimeStamp"
+       sd."WL", sd."BatteryVoltage", sd."Salt", sd."TimeStamp"
 FROM "Stations" s
 LEFT JOIN LATERAL (
-    SELECT "WL", "BatteryVoltage", "TimeStamp"
+    SELECT "WL", "BatteryVoltage", "Salt", "TimeStamp"
     FROM "SensorData"
     WHERE "StationId" = s."Id"
     ORDER BY "TimeStamp" DESC
@@ -355,10 +355,10 @@ ORDER BY s."Name";
 
 QUERY_SINGLE = """
 SELECT s."Id", s."Name", s."ExternalId", s."City",
-       sd."WL", sd."BatteryVoltage", sd."TimeStamp"
+       sd."WL", sd."BatteryVoltage", sd."Salt", sd."TimeStamp"
 FROM "Stations" s
 LEFT JOIN LATERAL (
-    SELECT "WL", "BatteryVoltage", "TimeStamp"
+    SELECT "WL", "BatteryVoltage", "Salt", "TimeStamp"
     FROM "SensorData"
     WHERE "StationId" = s."Id"
     ORDER BY "TimeStamp" DESC
@@ -377,8 +377,8 @@ GROUP BY s."Id", s."Name", s."ExternalId"
 ORDER BY row_count ASC, s."Name";
 """
 
-COLUMNS = ("Name", "External ID", "City", "Water Level", "Battery (V)", "Timestamp")
-COL_KEYS = ("name", "external_id", "city", "wl", "battery", "timestamp")
+COLUMNS = ("Name", "External ID", "City", "Water Level", "Battery (V)", "Salt", "Timestamp")
+COL_KEYS = ("name", "external_id", "city", "wl", "battery", "salt", "timestamp")
 
 
 def fetch_rows(station_id: int | None = None) -> tuple[list[dict], list[tuple]]:
@@ -398,7 +398,7 @@ def fetch_rows(station_id: int | None = None) -> tuple[list[dict], list[tuple]]:
     result = []
     no_data = []
     for row in rows:
-        sid, name, ext_id, city, wl, battery, ts = row
+        sid, name, ext_id, city, wl, battery, salt, ts = row
         ts_str = ""
         if ts is not None:
             if ts.tzinfo is None:
@@ -410,6 +410,7 @@ def fetch_rows(station_id: int | None = None) -> tuple[list[dict], list[tuple]]:
             "id": sid, "name": name or "", "external_id": ext_id or "",
             "city": city or "", "wl": wl if wl else "---",
             "battery": f"{battery:.3f}" if battery is not None else "---",
+            "salt": f"{salt:.2f}" if salt is not None else "---",
             "timestamp": ts_str or "---",
         })
 
@@ -809,7 +810,7 @@ class App(ctk.CTk):
             table_outer, columns=COL_KEYS, show="headings",
             style="T.Treeview", selectmode="browse",
         )
-        col_widths = [200, 120, 120, 100, 110, 175]
+        col_widths = [200, 120, 120, 100, 100, 70, 175]
         for key, label, w in zip(COL_KEYS, COLUMNS, col_widths):
             self.tree.heading(key, text=label, command=lambda c=key: self._sort_by(c))
             self.tree.column(key, width=w, anchor="w", minwidth=60)
@@ -1138,7 +1139,7 @@ class App(ctk.CTk):
             tag = "nodata" if not has_data else ("even" if i % 2 == 0 else "odd")
             self.tree.insert("", "end", iid=iid, values=(
                 row["name"], row["external_id"], row["city"],
-                row["wl"], row["battery"], row["timestamp"],
+                row["wl"], row["battery"], row["salt"], row["timestamp"],
             ), tags=(tag,))
 
     def _sort_by(self, col: str):
