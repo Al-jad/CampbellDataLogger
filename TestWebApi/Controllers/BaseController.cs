@@ -199,6 +199,7 @@ namespace TestWorkerService.Controller
                             x.WL,
                             x.BatteryVoltage,
                             x.Salt,
+                            x.TDS,
                             x.Record,
                         }).FirstOrDefault(),
                 })
@@ -229,6 +230,7 @@ namespace TestWorkerService.Controller
                     x.WL,
                     x.BatteryVoltage,
                     x.Salt,
+                    x.TDS,
                     x.Record,
                     Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
                 })
@@ -345,6 +347,7 @@ namespace TestWorkerService.Controller
                             WL = (x.SourceAddress == "waterresourcesmng.website" && d.WL.Length > 2) ? $"{d.WL.Insert(d.WL.Length - 2, ".")}" : d.WL,
                             d.BatteryVoltage,
                             d.Salt,
+                            d.TDS,
                             d.Record,
                         }).FirstOrDefault(),
                 })
@@ -380,6 +383,7 @@ namespace TestWorkerService.Controller
                     WL = (x.Station != null && x.Station.SourceAddress == "waterresourcesmng.website" && x.WL.Length > 2) ? $"{x.WL.Insert(x.WL.Length - 2, ".")}" : x.WL,
                     x.BatteryVoltage,
                     x.Salt,
+                    x.TDS,
                     x.Record,
                     Station = x.Station != null ? new { x.Station.Name, x.Station.Id } : null,
                 })

@@ -179,6 +179,7 @@ namespace EmusatWorkerService
 
                                     double battery = ParseBatteryVoltage(values, dcpid == "1886A3C8");
                                     double? salt = ParseSalt(processedStr);
+                                    double? tds = ParseTds(processedStr);
 
                                     data.Add(new SensorData
                                     {
@@ -186,6 +187,7 @@ namespace EmusatWorkerService
                                         WL = wl,
                                         BatteryVoltage = battery,
                                         Salt = salt,
+                                        TDS = tds,
                                         TimeStamp = timestamp,
                                     });
                                 }
@@ -266,6 +268,15 @@ namespace EmusatWorkerService
             return match.Success &&
                    double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double salt)
                 ? salt
+                : null;
+        }
+
+        private static double? ParseTds(string processedSegment)
+        {
+            var match = Regex.Match(processedSegment, @"TDS[^#]*#\s*\d{2}\s*(\d+\.\d{2})", RegexOptions.IgnoreCase);
+            return match.Success &&
+                   double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double tds)
+                ? tds
                 : null;
         }
 

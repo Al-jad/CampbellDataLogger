@@ -10,6 +10,7 @@ public class SensorData
     [StringLength(16)] public required string WL { get; set; }
     public double? BatteryVoltage { get; set; }
     public double? Salt { get; set; }
+    public double? TDS { get; set; }
     public long? StationId { get; set; }
     public Station? Station { get; set; }
 }

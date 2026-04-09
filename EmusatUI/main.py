@@ -135,10 +135,21 @@ def parse_battery_voltage(values: list[str], is_mowr77: bool) -> float:
 
 
 _SALT_RE = re.compile(r"SAL[^#]*#\s*\d{2}\s*(\d+\.\d{2})", re.IGNORECASE)
+_TDS_RE = re.compile(r"TDS[^#]*#\s*\d{2}\s*(\d+\.\d{2})", re.IGNORECASE)
 
 
 def parse_salt(processed_segment: str) -> float | None:
     m = _SALT_RE.search(processed_segment)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def parse_tds(processed_segment: str) -> float | None:
+    m = _TDS_RE.search(processed_segment)
     if m:
         try:
             return float(m.group(1))
@@ -202,8 +213,9 @@ def parse_entries(data: bytes, dcpid: str, last_ts: datetime, log_fn) -> list[di
             wl = values[7] if (is_mowr77 and len(values) > 7) else (values[3] if len(values) > 3 else "0")
             battery = parse_battery_voltage(values, is_mowr77)
             salt = parse_salt(processed_str)
+            tds = parse_tds(processed_str)
 
-            results.append({"wl": wl, "battery": battery, "salt": salt, "timestamp": ts})
+            results.append({"wl": wl, "battery": battery, "salt": salt, "tds": tds, "timestamp": ts})
 
         except Exception as ex:
             log_fn("WARN", f"  [{dcpid}] entry {entry_num+1}/{entry_count}: {ex}")
@@ -286,11 +298,11 @@ def _sync_dcpid(cur, conn, dcpid: str, session: requests.Session, log_fn) -> dic
 
     if entries:
         with cur.copy(
-            'COPY "SensorData" ("StationId", "WL", "BatteryVoltage", "Salt", "TimeStamp", "Record") '
+            'COPY "SensorData" ("StationId", "WL", "BatteryVoltage", "Salt", "TDS", "TimeStamp", "Record") '
             "FROM STDIN"
         ) as copy:
             for e in entries:
-                copy.write_row((station_id, e["wl"], e["battery"], e["salt"], e["timestamp"], 0))
+                copy.write_row((station_id, e["wl"], e["battery"], e["salt"], e["tds"], e["timestamp"], 0))
         conn.commit()
         log_fn("OK", f"[{dcpid}] Saved {len(entries)} new row(s)")
         stats["new_rows"] += len(entries)
@@ -340,10 +352,10 @@ def sync_single_station(dcpid: str, log_fn) -> dict:
 
 QUERY_ALL = """
 SELECT s."Id", s."Name", s."ExternalId", s."City",
-       sd."WL", sd."BatteryVoltage", sd."Salt", sd."TimeStamp"
+       sd."WL", sd."BatteryVoltage", sd."Salt", sd."TDS", sd."TimeStamp"
 FROM "Stations" s
 LEFT JOIN LATERAL (
-    SELECT "WL", "BatteryVoltage", "Salt", "TimeStamp"
+    SELECT "WL", "BatteryVoltage", "Salt", "TDS", "TimeStamp"
     FROM "SensorData"
     WHERE "StationId" = s."Id"
     ORDER BY "TimeStamp" DESC
@@ -355,10 +367,10 @@ ORDER BY s."Name";
 
 QUERY_SINGLE = """
 SELECT s."Id", s."Name", s."ExternalId", s."City",
-       sd."WL", sd."BatteryVoltage", sd."Salt", sd."TimeStamp"
+       sd."WL", sd."BatteryVoltage", sd."Salt", sd."TDS", sd."TimeStamp"
 FROM "Stations" s
 LEFT JOIN LATERAL (
-    SELECT "WL", "BatteryVoltage", "Salt", "TimeStamp"
+    SELECT "WL", "BatteryVoltage", "Salt", "TDS", "TimeStamp"
     FROM "SensorData"
     WHERE "StationId" = s."Id"
     ORDER BY "TimeStamp" DESC
@@ -377,8 +389,8 @@ GROUP BY s."Id", s."Name", s."ExternalId"
 ORDER BY row_count ASC, s."Name";
 """
 
-COLUMNS = ("Name", "External ID", "City", "Water Level", "Battery (V)", "Salt", "Timestamp")
-COL_KEYS = ("name", "external_id", "city", "wl", "battery", "salt", "timestamp")
+COLUMNS = ("Name", "External ID", "City", "Water Level", "Battery (V)", "Salt", "TDS", "Timestamp")
+COL_KEYS = ("name", "external_id", "city", "wl", "battery", "salt", "tds", "timestamp")
 
 
 def fetch_rows(station_id: int | None = None) -> tuple[list[dict], list[tuple]]:
@@ -398,7 +410,7 @@ def fetch_rows(station_id: int | None = None) -> tuple[list[dict], list[tuple]]:
     result = []
     no_data = []
     for row in rows:
-        sid, name, ext_id, city, wl, battery, salt, ts = row
+        sid, name, ext_id, city, wl, battery, salt, tds, ts = row
         ts_str = ""
         if ts is not None:
             if ts.tzinfo is None:
@@ -411,6 +423,7 @@ def fetch_rows(station_id: int | None = None) -> tuple[list[dict], list[tuple]]:
             "city": city or "", "wl": wl if wl else "---",
             "battery": f"{battery:.3f}" if battery is not None else "---",
             "salt": f"{salt:.2f}" if salt is not None else "---",
+            "tds": f"{tds:.2f}" if tds is not None else "---",
             "timestamp": ts_str or "---",
         })
 
@@ -810,7 +823,7 @@ class App(ctk.CTk):
             table_outer, columns=COL_KEYS, show="headings",
             style="T.Treeview", selectmode="browse",
         )
-        col_widths = [200, 120, 120, 100, 100, 70, 175]
+        col_widths = [200, 120, 120, 100, 100, 70, 70, 175]
         for key, label, w in zip(COL_KEYS, COLUMNS, col_widths):
             self.tree.heading(key, text=label, command=lambda c=key: self._sort_by(c))
             self.tree.column(key, width=w, anchor="w", minwidth=60)
@@ -1139,7 +1152,7 @@ class App(ctk.CTk):
             tag = "nodata" if not has_data else ("even" if i % 2 == 0 else "odd")
             self.tree.insert("", "end", iid=iid, values=(
                 row["name"], row["external_id"], row["city"],
-                row["wl"], row["battery"], row["salt"], row["timestamp"],
+                row["wl"], row["battery"], row["salt"], row["tds"], row["timestamp"],
             ), tags=(tag,))
 
     def _sort_by(self, col: str):
