@@ -704,7 +704,6 @@ class App(ctk.CTk):
         self.option_add("*TCombobox*Listbox.foreground", "#cdd6f4")
         self.option_add("*TCombobox*Listbox.selectBackground", "#45475a")
         self.option_add("*TCombobox*Listbox.selectForeground", "#cdd6f4")
-        self.option_add("*TCombobox*Listbox.font", "Segoe UI 10")
 
         # ── top bar ───────────────────────────────────────────────────────
         top = ctk.CTkFrame(self, height=56, corner_radius=0)
