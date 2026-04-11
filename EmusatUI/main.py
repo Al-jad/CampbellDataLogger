@@ -700,6 +700,12 @@ class App(ctk.CTk):
         self._load_stations_async()
 
     def _build_ui(self):
+        self.option_add("*TCombobox*Listbox.background", "#313244")
+        self.option_add("*TCombobox*Listbox.foreground", "#cdd6f4")
+        self.option_add("*TCombobox*Listbox.selectBackground", "#45475a")
+        self.option_add("*TCombobox*Listbox.selectForeground", "#cdd6f4")
+        self.option_add("*TCombobox*Listbox.font", "Segoe UI 10")
+
         # ── top bar ───────────────────────────────────────────────────────
         top = ctk.CTkFrame(self, height=56, corner_radius=0)
         top.pack(fill="x", side="top")
@@ -733,12 +739,13 @@ class App(ctk.CTk):
         ctk.CTkLabel(ctrl, text="Station:").pack(side="left", padx=(4, 2))
 
         self.station_var = tk.StringVar(value="-- loading --")
-        self.station_combo = ctk.CTkComboBox(
-            ctrl, variable=self.station_var,
+        self.station_combo = ttk.Combobox(
+            ctrl, textvariable=self.station_var,
             values=["-- loading --"],
-            width=250,
+            width=30, height=10,
+            state="readonly",
         )
-        self.station_combo.pack(side="left", padx=3)
+        self.station_combo.pack(side="left", padx=3, ipady=4)
 
         self.btn_fetch_one = ctk.CTkButton(
             ctrl, text="View", width=60,
@@ -810,6 +817,15 @@ class App(ctk.CTk):
 
         style = ttk.Style(self)
         style.theme_use("clam")
+        style.configure("TCombobox",
+                         fieldbackground="#313244", background="#45475a",
+                         foreground="#cdd6f4", arrowcolor="#89b4fa",
+                         selectbackground="#45475a", selectforeground="#cdd6f4",
+                         insertcolor="#cdd6f4", borderwidth=1, relief="flat")
+        style.map("TCombobox",
+                  fieldbackground=[("readonly", "#313244")],
+                  foreground=[("readonly", "#cdd6f4")],
+                  arrowcolor=[("active", "#cba6f7")])
         style.configure("T.Treeview", background="#1e1e2e", foreground="#cdd6f4",
                          fieldbackground="#1e1e2e", rowheight=28,
                          font=("Segoe UI", 10), borderwidth=0)
